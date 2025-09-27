@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
+import unicodedata
 from dataclasses import asdict
 from typing import Iterable, List, Optional
 
@@ -49,9 +51,27 @@ class KnowledgeAgent(Agent):
         start_time = time.perf_counter()
         query = payload.message.strip()
         normalised = query.lower()
+        user_id = payload.user_id
+        history_key = f"user_history::{user_id}" if user_id else None
+        previous_message = None
+        if history_key:
+            stored_history = self._cache.get(history_key)
+            if isinstance(stored_history, dict):
+                previous_message = stored_history.get("last_message")
+
+        remembered_previous = bool(previous_message)
 
         if not settings.rag_enabled:
-            return self._fallback_response(query, cache_hit=False, rag_used=False, web_search_used=False)
+            response = self._fallback_response(
+                query,
+                cache_hit=False,
+                rag_used=False,
+                web_search_used=False,
+                remembered_previous=remembered_previous,
+            )
+            response.meta.update({"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)})
+            self._record_user_message(history_key, query)
+            return response
 
         cache_key = normalised
         cached = self._cache.get(cache_key)
@@ -82,8 +102,15 @@ class KnowledgeAgent(Agent):
             web_search_used = bool(external_citations)
 
         if not rag_used and not external_citations:
-            response = self._fallback_response(query, cache_hit=cache_hit, rag_used=False, web_search_used=False)
+            response = self._fallback_response(
+                query,
+                cache_hit=cache_hit,
+                rag_used=False,
+                web_search_used=False,
+                remembered_previous=remembered_previous,
+            )
             response.meta.update({"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)})
+            self._record_user_message(history_key, query)
             return response
 
         try:
@@ -101,8 +128,12 @@ class KnowledgeAgent(Agent):
                 "Respond in English using 2 to 5 sentences and always cite the relevant sources. "
                 "If the context does not cover the request, be explicit about that."
             )
+            conversation_lines = [f"Latest user message: {query}"]
+            if previous_message:
+                conversation_lines.insert(0, f"Previous user message: {previous_message}")
+            conversation_snapshot = "\n".join(conversation_lines)
             user_prompt = (
-                f"User question: {query}\n\n"
+                f"Conversation snapshot:\n{conversation_snapshot}\n\n"
                 f"Support context:\n{composed_context}\n\n"
                 "Instruction: deliver a concise answer, in English, and cite the supporting sources by name."
             )
@@ -137,20 +168,41 @@ class KnowledgeAgent(Agent):
             "fallback_used": fallback_used,
             "web_search_used": web_search_used,
             "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+            "previous_message_remembered": remembered_previous,
         }
 
-        return AgentResponse(
+        response = AgentResponse(
             agent=self.name,
             content=_normalise_text(ai_response),
             citations=citations,
             meta=meta,
         )
+        self._record_user_message(history_key, query)
+        return response
 
-    def _fallback_response(self, query: str, *, cache_hit: bool, rag_used: bool, web_search_used: bool) -> AgentResponse:
-        content = (
-            "I could not find enough reliable information in the current InfinitePay knowledge base to answer accurately. "
-            "Please review the official documentation or reach out to support for more details."
-        )
+    def _fallback_response(
+        self,
+        query: str,
+        *,
+        cache_hit: bool,
+        rag_used: bool,
+        web_search_used: bool,
+        remembered_previous: bool,
+    ) -> AgentResponse:
+        if _is_simple_greeting(query):
+            content = "Olá novamente! Como posso ajudar você desta vez?" if remembered_previous else "Olá! Como posso ajudar você hoje?"
+        else:
+            if remembered_previous:
+                content = (
+                    "Ainda não encontrei informações suficientes na base de conhecimento, "
+                    "mas estou acompanhando sua solicitação. Pode me contar um pouco mais "
+                    "sobre o que você precisa para que eu possa ajudar melhor?"
+                )
+            else:
+                content = (
+                    "Ainda não encontrei informações suficientes na base de conhecimento para responder com precisão. "
+                    "Pode compartilhar mais detalhes? Estou aqui para ajudar!"
+                )
         citations = build_citations([], fallback_urls=FALLBACK_URLS)
         meta = {
             "rag_used": rag_used,
@@ -160,8 +212,17 @@ class KnowledgeAgent(Agent):
             "fallback_used": True,
             "web_search_used": web_search_used,
             "duration_ms": 0.0,
+            "previous_message_remembered": remembered_previous,
         }
         return AgentResponse(agent=self.name, content=content, citations=citations, meta=meta)
+
+    def _record_user_message(self, history_key: Optional[str], message: str) -> None:
+        if not history_key:
+            return
+        try:
+            self._cache.set(history_key, {"last_message": message})
+        except Exception:
+            logger.debug("rag.knowledge.history_store_failed", extra={"history_key": history_key})
 
 
 def _external_citation(result: WebSearchResult) -> Citation:
@@ -184,6 +245,49 @@ def _average_score(chunks: Iterable[RetrievedChunk]) -> float:
 
 def _normalise_text(text: str) -> str:
     return " ".join(text.strip().split())
+
+
+_GREETING_WORDS = {
+    "oi",
+    "ola",
+    "hello",
+    "hi",
+    "hey",
+    "eai",
+    "eae",
+}
+
+_GREETING_PHRASES = {
+    "bom dia",
+    "boa tarde",
+    "boa noite",
+    "ola bom dia",
+    "ola boa tarde",
+    "ola boa noite",
+}
+
+
+def _strip_accents(value: str) -> str:
+    normalised = unicodedata.normalize("NFD", value)
+    return "".join(char for char in normalised if unicodedata.category(char) != "Mn")
+
+
+def _is_simple_greeting(text: str) -> bool:
+    cleaned = _strip_accents(text or "").lower()
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return False
+    if cleaned in _GREETING_PHRASES or cleaned in _GREETING_WORDS:
+        return True
+    words = cleaned.split()
+    if len(words) <= 3 and words:
+        if words[0] in _GREETING_WORDS:
+            return True
+        joined = " ".join(words[:2])
+        if joined in _GREETING_PHRASES:
+            return True
+    return False
 
 
 def _serialise_chunk(chunk: RetrievedChunk) -> dict:
