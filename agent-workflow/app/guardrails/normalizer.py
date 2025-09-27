@@ -5,6 +5,7 @@ import unicodedata
 from typing import Tuple
 
 from app.settings import settings
+from app.utils.text import strip_portuguese_accents
 
 _REMOVABLE_PATTERN = re.compile(r"[\s]{2,}")
 
@@ -39,6 +40,7 @@ def normalise_text(text: str) -> Tuple[str, bool]:
     normalised = text
 
     if settings.guardrails_normalize_remove_accents:
+        normalised = strip_portuguese_accents(normalised)
         normalised = unicodedata.normalize("NFD", normalised)
         normalised = "".join(ch for ch in normalised if unicodedata.category(ch) != "Mn")
         normalised = unicodedata.normalize("NFC", normalised)

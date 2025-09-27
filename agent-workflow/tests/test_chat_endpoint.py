@@ -104,6 +104,17 @@ def test_chat_guardrails_meta_flags(client: TestClient) -> None:
     assert meta.get("guardrails_pre_ms") is not None
 
 
+def test_chat_accepts_latin1_payload_with_accents(client: TestClient) -> None:
+    latin1_payload = '{"message":"Ol\xe1 meu amor","user_id":"client789"}'.encode("latin-1")
+
+    response = client.post("/chat", data=latin1_payload, headers={"content-type": "application/json"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["agent"]
+    assert payload["meta"]["guardrails_accents_stripped"] is True
+
+
 def test_chat_redirects_on_low_confidence(monkeypatch, client: TestClient) -> None:
     monkeypatch.setattr(settings, "guardrails_redirect_always", False)
     payload = {"message": "I have an uncertain doubt", "user_id": "cli-low"}

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.observability.logger import setup_logging
 from app.observability.tracing import CorrelationContext
@@ -8,12 +9,47 @@ from app.routers.health import router as health_router
 from app.routers.router_agent import router as router_agent_router
 from app.routers.support_tickets import router as support_tickets_router
 from app.settings import settings
+from app.utils.text import strip_portuguese_accents
+
+
+class AccentStrippingMiddleware(BaseHTTPMiddleware):
+    """Ensure request bodies remain parseable when non-UTF8 accents are submitted.
+
+    Some client environments (notably Windows terminals) may encode JSON payloads
+    with latin-1 characters when users type Portuguese accents. FastAPI expects
+    UTF-8 and will raise a parsing error otherwise. The middleware eagerly reads
+    the request body, attempts to decode it as UTF-8, and falls back to latin-1
+    while replacing accented characters with their ASCII counterparts. When a
+    fallback occurs, we mark the request state so downstream consumers know the
+    payload has already been normalised.
+    """
+
+    async def dispatch(self, request, call_next):  # type: ignore[override]
+        if request.method in {"POST", "PUT", "PATCH"}:
+            body = await request.body()
+            if body:
+                accents_stripped = False
+                try:
+                    # Try to decode as UTF-8 first. If it succeeds we leave the
+                    # original payload untouched so other normalisers can run.
+                    body.decode("utf-8")
+                except UnicodeDecodeError:
+                    decoded = body.decode("latin-1")
+                    normalised = strip_portuguese_accents(decoded)
+                    accents_stripped = normalised != decoded
+                    body = normalised.encode("utf-8")
+                if accents_stripped:
+                    request.state.accents_stripped = True
+
+                request._body = body  # type: ignore[attr-defined]
+        return await call_next(request)
 
 
 def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(title=settings.app_name, version=settings.app_version, docs_url="/docs")
     app.add_middleware(CorrelationContext)
+    app.add_middleware(AccentStrippingMiddleware)
     allowed_origins = [origin.strip() for origin in settings.frontend_allowed_origins.split(",") if origin.strip()]
     app.add_middleware(
         CORSMiddleware,

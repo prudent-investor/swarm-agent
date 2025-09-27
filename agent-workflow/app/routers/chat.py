@@ -326,6 +326,8 @@ def chat_endpoint(
         metadata=payload.metadata,
         origin="chat",
     )
+    if getattr(request.state, "accents_stripped", False):
+        pre_guardrails.flags["accents_stripped"] = True
     processed_message = pre_guardrails.message
     masked_preview = pre_guardrails.masked_preview()
     pre_flags = {f"guardrails_{key}": value for key, value in pre_guardrails.flags.items()}
