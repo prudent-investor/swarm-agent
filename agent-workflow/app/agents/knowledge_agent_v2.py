@@ -92,20 +92,19 @@ class KnowledgeAgent(Agent):
                 context_snippets.append(context_text)
             if external_citations:
                 for result in external_citations:
-                    snippet = f"Fonte externa: {result.url}\nTrecho: {result.snippet}"
+                    snippet = f"External source: {result.url}\nExcerpt: {result.snippet}"
                     context_snippets.append(snippet)
 
             composed_context = "\n\n".join(context_snippets)
             system_prompt = (
-                "Voce e o KnowledgeAgent v2 da InfinitePay. Use apenas o contexto fornecido para responder"
-                " em portugues do Brasil, de forma concisa (2 a 5 frases) e sempre cite as fontes."
-                " Caso o contexto nao cubra a pergunta, informe isso de maneira honesta."
+                "You are InfinitePay's KnowledgeAgent v2. Use only the provided context to answer. "
+                "Respond in English using 2 to 5 sentences and always cite the relevant sources. "
+                "If the context does not cover the request, be explicit about that."
             )
             user_prompt = (
-                f"Pergunta do usuario: {query}\n\n"
-                f"Contexto de suporte:\n{composed_context}\n\n"
-                "Instrucao: gere uma resposta curta, objetiva e cite explicitamente as fontes relevantes"
-                " usando os titulos das paginas oferecidas."
+                f"User question: {query}\n\n"
+                f"Support context:\n{composed_context}\n\n"
+                "Instruction: deliver a concise answer, in English, and cite the supporting sources by name."
             )
             ai_response = self._provider.generate_response(
                 system_prompt=system_prompt,
@@ -118,7 +117,7 @@ class KnowledgeAgent(Agent):
             raise AgentControlledError(
                 error="knowledge_agent_unavailable",
                 status_code=503,
-                details="Nao foi possivel contatar o modelo de linguagem.",
+                details="The language model could not be reached.",
                 agent=self.name,
             ) from exc
 
@@ -149,8 +148,8 @@ class KnowledgeAgent(Agent):
 
     def _fallback_response(self, query: str, *, cache_hit: bool, rag_used: bool, web_search_used: bool) -> AgentResponse:
         content = (
-            "Nao encontrei informacoes suficientes no acervo atual da InfinitePay para responder com precisao."
-            " Recomendo consultar a pagina oficial ou documentacao atualizada."
+            "I could not find enough reliable information in the current InfinitePay knowledge base to answer accurately. "
+            "Please review the official documentation or reach out to support for more details."
         )
         citations = build_citations([], fallback_urls=FALLBACK_URLS)
         meta = {
@@ -171,7 +170,7 @@ def _external_citation(result: WebSearchResult) -> Citation:
 
 def _title_from_external(url: str) -> str:
     if not url:
-        return "Fonte Externa"
+        return "External Source"
     parts = url.split("//", 1)[-1]
     return parts.split("/", 1)[0]
 

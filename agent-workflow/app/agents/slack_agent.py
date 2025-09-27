@@ -61,7 +61,7 @@ class SlackAgent(Agent):
 
         if action == "cancel":
             self._handoff.clear(correlation_id=correlation_id, user_id=payload.user_id, token=token)
-            content = "Tudo bem, seguimos por aqui. Se precisar escalar novamente, e so avisar."
+            content = "No problem, we will keep helping you here. Let me know if you need to escalate again."
             return self._response(content, meta={
                 "handoff_status": "cancelled",
                 "handoff_channel": "slack",
@@ -78,7 +78,7 @@ class SlackAgent(Agent):
                 "channel": channel,
             }
             content = (
-                "O canal de suporte humano esta desabilitado no momento. Nossa equipe continua acompanhando por aqui."
+                "The human support channel is currently disabled. Our team will keep assisting you in this chat."
             )
             return self._response(content, meta=meta)
 
@@ -108,17 +108,17 @@ class SlackAgent(Agent):
             "channel": channel,
             "redirected": True,
         }
-        content = f"Acionei o time humano no canal {channel}. Eles vao acompanhar e retornar em breve."
+        content = f"I have notified the human support team in channel {channel}. They will review the case and follow up soon."
         return self._response(content, meta=meta)
 
     def _handle_confirm(self, payload: AgentRequest, *, correlation_id: Optional[str], token: Optional[str]) -> AgentResponse:
         pending = self._handoff.pop(correlation_id=correlation_id, user_id=payload.user_id, token=token)
         if not pending:
-            content = "Nao localizei um pedido de escalonamento pendente. Se ainda precisar, me avise e pedirei novamente."
+            content = "I could not find a pending escalation request. If you still need assistance, let me know and I will create one."
             return self._response(content, meta={"handoff_status": "not_found"})
 
         if not settings.slack_enabled:
-            content = "O canal de escalonamento humano esta temporariamente indisponivel. Nossa equipe segue acompanhando por aqui."
+            content = "The human escalation channel is temporarily unavailable. Our team will keep monitoring your request here."
             meta = {
                 "handoff_status": "disabled",
                 "handoff_channel": "slack",
@@ -147,7 +147,11 @@ class SlackAgent(Agent):
         if not result.ok:
             meta["handoff_error"] = result.error
 
-        content = "Acionei nosso time humano no Slack. Eles vao acompanhar e retornam em breve." if result.ok else "Nao consegui acionar o time humano agora, mas ja notifiquei nossa equipe interna."
+        content = (
+            "I have engaged our human support team on Slack. They will monitor the case and respond shortly."
+            if result.ok
+            else "I could not reach the human support team right now, but I have already notified our internal staff."
+        )
 
         return self._response(content, meta=meta)
 
@@ -156,7 +160,7 @@ class SlackAgent(Agent):
         title = _compose_title(pending)
         links = []
         if pending.ticket_id:
-            links.append(f"https://www.infinitepay.io/suporte/tickets/{pending.ticket_id}")
+            links.append(f"https://www.infinitepay.io/support/tickets/{pending.ticket_id}")
 
         context = SlackContext(
             channel=settings.slack_default_channel,
