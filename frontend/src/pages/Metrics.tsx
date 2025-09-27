@@ -20,7 +20,7 @@ function MetricsPage(): JSX.Element {
       const text = await response.text();
       setMetrics({ status: "ready", payload: text });
     } catch (err) {
-      setMetrics({ status: "error", payload: err instanceof Error ? err.message : "Erro desconhecido" });
+      setMetrics({ status: "error", payload: err instanceof Error ? err.message : "Unknown error" });
     }
   }, [API_BASE_URL]);
 
@@ -31,16 +31,16 @@ function MetricsPage(): JSX.Element {
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h2 className="text-3xl font-semibold text-gold">Observabilidade em Tempo Real</h2>
+        <h2 className="text-3xl font-semibold text-gold">Real-time Observability</h2>
         <p className="text-sm text-slate-400">
-          Acesse as métricas Prometheus expostas pelo backend. Utilize o botão atualizar para obter os valores mais recentes.
+          Inspect the Prometheus metrics exported by the backend and refresh to fetch the most recent snapshot.
         </p>
         <button
           type="button"
           onClick={() => void loadMetrics()}
           className="self-start rounded-full border border-gold/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-gold transition hover:bg-gold/10"
         >
-          Atualizar
+          Refresh
         </button>
       </header>
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 shadow-xl">
@@ -49,7 +49,7 @@ function MetricsPage(): JSX.Element {
           <span className="text-slate-500">{metrics.status}</span>
         </div>
         <pre className="max-h-[480px] overflow-auto px-5 py-6 text-xs leading-relaxed text-emerald-200">
-          {metrics.payload || "Carregando…"}
+          {metrics.payload || "Loading…"}
         </pre>
       </div>
     </section>

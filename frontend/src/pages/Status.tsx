@@ -54,7 +54,7 @@ function StatusPage(): JSX.Element {
           <span className={`h-3 w-3 rounded-full ${indicator}`} aria-hidden />
         </div>
         <pre className="overflow-x-auto rounded-2xl bg-black/40 p-4 text-xs text-slate-300">
-          {state.data ? JSON.stringify(state.data, null, 2) : state.error ?? "Carregando…"}
+          {state.data ? JSON.stringify(state.data, null, 2) : state.error ?? "Loading…"}
         </pre>
       </div>
     );
@@ -63,9 +63,9 @@ function StatusPage(): JSX.Element {
   return (
     <section className="flex flex-col gap-6">
       <header className="space-y-2">
-        <h2 className="text-3xl font-semibold text-gold">Estado Operacional</h2>
+        <h2 className="text-3xl font-semibold text-gold">Operational Status</h2>
         <p className="text-sm text-slate-400">
-          Verifique rapidamente se os serviços de backend estão saudáveis e prontos para receber tráfego.
+          Quickly confirm whether the backend services are healthy and ready to receive traffic.
         </p>
       </header>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
