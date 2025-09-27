@@ -96,6 +96,27 @@ def test_knowledge_agent_fallback_when_no_results():
     assert any("infinitepay.io" in citation["url"] for citation in response.citations)
 
 
+def test_knowledge_agent_handles_greetings_and_tracks_history():
+    cache = QueryCache(ttl_seconds=300)
+    agent = KnowledgeAgent(
+        provider=StubProvider("fallback"),
+        retriever=StubRetriever([]),
+        reranker=StubReranker(),
+        cache=cache,
+        web_search=StubWebSearch(),
+    )
+
+    first = agent.run(AgentRequest(message="Olá", user_id="client789"))
+    assert first.meta["fallback_used"] is True
+    assert first.meta["previous_message_remembered"] is False
+    assert "Como posso ajudar" in first.content
+
+    second = agent.run(AgentRequest(message="Ainda preciso de suporte", user_id="client789"))
+    assert second.meta["fallback_used"] is True
+    assert second.meta["previous_message_remembered"] is True
+    assert "ainda não encontrei" in second.content.lower()
+
+
 def test_knowledge_agent_cache_hit(sample_chunks):
     cache = QueryCache(ttl_seconds=300)
     agent = KnowledgeAgent(
