@@ -12,6 +12,11 @@ from .metrics import GuardrailMetricsStore
 from .moderation import moderate_text
 from .normalizer import normalise_text
 from .pii import mask_text
+from .violations import (
+    GuardrailViolation,
+    detect_policy_violations,
+    violations_from_pii_reasons,
+)
 from .validator import validate_payload
 
 
@@ -19,8 +24,9 @@ from .validator import validate_payload
 class PreprocessResult:
     message: str
     masked_for_log: str
-    flags: Dict[str, bool]
+    flags: Dict[str, object]
     detected_injections: List[str] = field(default_factory=list)
+    violations: List[GuardrailViolation] = field(default_factory=list)
     latency_ms: float = 0.0
 
     def masked_preview(self, limit: int = 200) -> str:
@@ -50,12 +56,13 @@ class GuardrailsService:
         validate_payload(message, user_id, metadata)
         self._metrics.increment("inputs_total")
 
-        flags: Dict[str, bool] = {
+        flags: Dict[str, object] = {
             "accents_stripped": False,
             "injection_detected": False,
             "pii_masked": False,
         }
         detected_injections: List[str] = []
+        violations: List[GuardrailViolation] = []
         processed = message
 
         if settings.guardrails_enabled:
@@ -70,13 +77,28 @@ class GuardrailsService:
                 flags["injection_detected"] = detected
                 if detected:
                     self._metrics.increment("injection_detected_total")
+                    violations.append(
+                        GuardrailViolation(
+                            category="prompt_injection",
+                            trigger=", ".join(detected_injections) or "prompt_injection",
+                            description="Detected an attempt to override system instructions.",
+                        )
+                    )
         else:
             processed = message.strip()
 
-        masked_for_log, masked_flag = mask_text(processed)
+        masked_for_log, masked_flag, mask_reasons = mask_text(processed)
         if masked_flag:
             flags["pii_masked"] = True
             self._metrics.increment("pii_masked_total")
+            violations.extend(violations_from_pii_reasons(mask_reasons))
+
+        violations.extend(detect_policy_violations(processed))
+        violations = _unique_violations(violations)
+        if violations:
+            flags["violations"] = True
+            flags["violations_details"] = [violation.as_dict() for violation in violations]
+            flags["violation_categories"] = sorted({violation.category for violation in violations})
 
         latency_ms = round((time.perf_counter() - start) * 1000, 3)
         return PreprocessResult(
@@ -84,6 +106,7 @@ class GuardrailsService:
             masked_for_log=masked_for_log.strip(),
             flags=flags,
             detected_injections=detected_injections,
+            violations=violations,
             latency_ms=latency_ms,
         )
 
@@ -119,10 +142,12 @@ class GuardrailsService:
                 flags["moderation_reason"] = moderation_reason
                 self._metrics.increment("moderation_blocked_total")
 
-        masked_content, masked_flag = mask_text(processed)
+        masked_content, masked_flag, mask_reasons = mask_text(processed)
         if masked_flag:
             flags["pii_masked_response"] = True
             self._metrics.increment("pii_masked_total")
+            if mask_reasons:
+                flags["pii_masked_response_reasons"] = mask_reasons
         processed = masked_content
 
         max_chars = settings.guardrails_max_output_chars
@@ -137,11 +162,12 @@ class GuardrailsService:
     def diagnostics(self, query: str) -> Dict[str, object]:
         preprocess = self.preprocess_input(message=query, user_id=None, metadata=None, origin="diagnostics")
         metrics_snapshot = self._metrics.snapshot()
-        masked_normalised, _ = mask_text(preprocess.message)
+        masked_normalised, _, _ = mask_text(preprocess.message)
         payload = {
             "normalized_text": masked_normalised[: settings.guardrails_max_input_chars],
             "flags": preprocess.flags,
             "detected_injections": preprocess.detected_injections,
+            "violations": [violation.as_dict() for violation in preprocess.violations],
             "masked_preview": preprocess.masked_preview(),
             "mode": settings.guardrails_mode,
         }
@@ -149,6 +175,18 @@ class GuardrailsService:
 
     def metrics_snapshot(self) -> Dict[str, int]:
         return self._metrics.snapshot().as_dict()
+
+
+def _unique_violations(violations: List[GuardrailViolation]) -> List[GuardrailViolation]:
+    unique: List[GuardrailViolation] = []
+    seen: set[tuple[str, str]] = set()
+    for violation in violations:
+        key = (violation.category, violation.trigger)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(violation)
+    return unique
 
 
 _guardrails_service: Optional[GuardrailsService] = None

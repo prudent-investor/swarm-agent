@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -23,6 +23,7 @@ from app.agents.router_agent import RouterAgent, router_agent as default_router_
 from app.agents.slack_agent import SlackAgent, get_slack_agent
 from app.agents.support_agent import CustomerSupportAgent
 from app.guardrails import get_guardrails_service
+from app.guardrails.violations import GuardrailViolation
 from app.observability.metrics import get_metrics_registry
 from app.schemas import ChatRequest, ChatResponse, ChatResponseMeta, HandoffConfirmation
 from app.services.llm_provider import LLMProvider
@@ -41,6 +42,16 @@ _shared_retriever = RAGRetriever()
 _shared_reranker = HeuristicReranker()
 _shared_cache = QueryCache(ttl_seconds=settings.rag_cache_ttl_seconds)
 _shared_web_search = NoopWebSearchClient()
+_DEFAULT_MANUAL_CITATION = {
+    "title": "Support ticket",
+    "url": "https://www.infinitepay.io/support",
+    "source_type": "infinitepay",
+}
+_GUARDRAIL_CITATION = {
+    "title": "Safety policy",
+    "url": "https://www.infinitepay.io/safety",
+    "source_type": "infinitepay",
+}
 _support_service = get_support_service()
 _handoff_flow: HandoffFlow = get_handoff_flow()
 _slack_agent = get_slack_agent()
@@ -143,6 +154,30 @@ def _log_event(
     logger.log(level, message, extra=payload)
 
 
+def _format_guardrail_violation_content(violations: List[GuardrailViolation]) -> str:
+    if not violations:
+        return (
+            "I cannot continue with this request because it violates our safety policies. "
+            "Please revise your request without restricted content."
+        )
+    lines = ["I cannot continue with this request because it violates our safety policies:"]
+    for violation in violations:
+        description = violation.description.rstrip(".")
+        trigger = violation.trigger
+        lines.append(f"- {description}. Triggered by '{trigger}'.")
+    lines.append("Please revise your request without the restricted content.")
+    return "\n".join(lines)
+
+
+def _build_violation_meta(violations: List[GuardrailViolation]) -> Dict[str, object]:
+    categories = sorted({violation.category for violation in violations})
+    return {
+        "guardrail_violation": True,
+        "guardrail_violation_categories": categories,
+        "guardrail_violations": [violation.as_dict() for violation in violations],
+    }
+
+
 def get_llm_provider() -> LLMProvider:
     return LLMProvider()
 
@@ -211,6 +246,7 @@ def _build_manual_response(
     pre_guardrail_flags: Optional[Dict[str, object]] = None,
     pre_guardrail_latency: float = 0.0,
     meta: Optional[Dict[str, object]] = None,
+    citations: Optional[List[Dict[str, object]]] = None,
 ) -> ChatResponse:
     post_result = _guardrails_service.postprocess_output(content)
     meta_dict = meta or {}
@@ -236,16 +272,12 @@ def _build_manual_response(
         **_guardrail_log_fields(meta_dict),
     )
 
+    citations_payload = [dict(item) for item in (citations or [_DEFAULT_MANUAL_CITATION])]
+
     return ChatResponse(
         agent=agent,
         content=content_final,
-        citations=[
-            {
-                "title": "Suporte humano",
-                "url": "https://www.infinitepay.io/suporte",
-                "source_type": "infinitepay",
-            }
-        ],
+        citations=citations_payload,
         meta=meta_model,
         correlation_id=correlation_id,
     )
@@ -327,6 +359,26 @@ def chat_endpoint(
         guardrails_pii_masked=pre_guardrails.flags.get("pii_masked", False),
     )
 
+    if pre_guardrails.violations:
+        violations = pre_guardrails.violations
+        violation_meta = _build_violation_meta(violations)
+        violation_details = violation_meta["guardrail_violations"]
+        pre_flags["guardrails_violation_blocked"] = True
+        pre_flags.setdefault("guardrails_violations_details", violation_details)
+        pre_flags.setdefault("guardrails_violation_categories", violation_meta["guardrail_violation_categories"])
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return _build_manual_response(
+            agent="guardrails",
+            route=Route.custom,
+            content=_format_guardrail_violation_content(violations),
+            correlation_id=correlation_id,
+            latency_ms=latency_ms,
+            pre_guardrail_flags=pre_flags,
+            pre_guardrail_latency=pre_guardrails.latency_ms,
+            meta=violation_meta,
+            citations=[_GUARDRAIL_CITATION],
+        )
+
     metadata = payload.metadata or {}
 
     token = metadata.get("handoff_token")
@@ -359,7 +411,7 @@ def chat_endpoint(
             )
         if classification == "deny":
             _handoff_flow.clear(correlation_id=correlation_id, user_id=payload.user_id, token=token)
-            content = "Tudo bem, nao vou acionar suporte humano agora. Se mudar de ideia, e so me avisar."
+            content = "All right, I will not escalate to human support now. Let me know if you change your mind."
             meta = {
                 "handoff_status": "cancelled",
                 "handoff_channel": "slack",
@@ -378,7 +430,7 @@ def chat_endpoint(
                 meta=meta,
             )
 
-        content = "Nao entendi. Responda apenas com 'sim' para acionar o time humano ou 'nao' para manter o atendimento aqui."
+        content = "I did not understand. Reply with 'yes' to reach the human team or 'no' to continue here."
         meta = {
             "handoff_status": "pending",
             "handoff_channel": "slack",
