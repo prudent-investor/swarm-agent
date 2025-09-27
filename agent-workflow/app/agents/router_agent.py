@@ -6,6 +6,7 @@ from typing import Optional
 from openai import OpenAI
 
 from app.settings import settings
+from app.utils.text import strip_portuguese_accents
 from .base import Route, RoutingDecision
 
 _DIRECT_REQUEST_PATTERNS = [
@@ -39,6 +40,7 @@ def _normalize(text: str) -> str:
     cleaned = cleaned.strip().lower()
     if not cleaned:
         return ""
+    cleaned = strip_portuguese_accents(cleaned)
     decomposed = unicodedata.normalize("NFD", cleaned)
     without_accents = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
     return unicodedata.normalize("NFC", without_accents)
