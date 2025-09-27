@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
-import resource
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Tuple
+
+import importlib
+from importlib import util
 
 from app.settings import settings
 
@@ -13,6 +15,10 @@ from app.settings import settings
 class ReadinessStatus:
     ready: bool
     checks: Dict[str, Tuple[bool, str | None]]
+
+
+_resource = importlib.import_module("resource") if util.find_spec("resource") else None
+_psutil = importlib.import_module("psutil") if util.find_spec("psutil") else None
 
 
 class ReadinessChecker:
@@ -65,14 +71,21 @@ def _cpu_usage_ok(limit_percent: int) -> Tuple[bool, str | None]:
         cpu_count = os.cpu_count() or 1
         usage_percent = (load1 / cpu_count) * 100
         return (usage_percent <= limit_percent, f"cpu_usage={usage_percent:.2f}")
-    except OSError:
+    except (OSError, AttributeError):
         return True, "loadavg_unavailable"
 
 
 def _memory_usage_ok(limit_mb: int) -> Tuple[bool, str | None]:
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    rss_kb = getattr(usage, "ru_maxrss", 0)
-    used_mb = rss_kb / 1024 if os.name != "nt" else rss_kb / (1024 * 1024)
+    if _resource is not None:
+        usage = _resource.getrusage(_resource.RUSAGE_SELF)
+        rss_kb = getattr(usage, "ru_maxrss", 0)
+        used_mb = rss_kb / 1024 if os.name != "nt" else rss_kb / (1024 * 1024)
+    elif _psutil is not None:
+        process = _psutil.Process(os.getpid())
+        used_mb = process.memory_info().rss / (1024 * 1024)
+    else:
+        return True, "memory_usage_unavailable"
+
     if used_mb <= limit_mb:
         return True, f"memory_used_mb={used_mb:.2f}"
     return False, f"memory_used_mb={used_mb:.2f}"
