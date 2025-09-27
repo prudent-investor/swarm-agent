@@ -73,19 +73,15 @@ def _mask_phone(match: re.Match[str]) -> str:
     suffix = digits[-2:]
     return f"{prefix}{suffix}"
 
-
 def _should_skip_phone_mask(text: str, match: re.Match[str]) -> bool:
     return _has_ticket_prefix(text, match)
-
 
 def _should_skip_card_mask(text: str, match: re.Match[str]) -> bool:
     return _has_ticket_prefix(text, match)
 
-
 def _has_ticket_prefix(text: str, match: re.Match[str]) -> bool:
     prefix = text[: match.start()]
     return bool(re.search(r"[A-Z]{3,}-$", prefix))
-
 
 def _mask_card_number(match: re.Match[str]) -> str:
     digits = re.sub(r"\D", "", match.group(0))

@@ -33,6 +33,7 @@ _DEFAULT_PATTERNS: Tuple[InjectionPattern, ...] = (
     InjectionPattern(r"\bignore\b.*\banter\w*", True),
     InjectionPattern(r"\bcomply\b.*\boverride\b", True),
     InjectionPattern(r"\bypass\b.*\bsecurity\b", True),
+
 )
 
 

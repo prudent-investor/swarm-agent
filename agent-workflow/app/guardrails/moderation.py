@@ -33,6 +33,7 @@ _BALANCED_DEFAULT: Tuple[ModerationRule, ...] = (
     ModerationRule("password", "system_access", "Detected a request for protected credentials."),
     ModerationRule("system password", "system_access", "Detected a request for protected credentials."),
     ModerationRule("senha do sistema", "system_access", "Detected a request for protected credentials."),
+
 )
 
 _STRICT_EXTRA: Tuple[ModerationRule, ...] = (

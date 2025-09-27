@@ -148,8 +148,6 @@ def test_chat_blocks_guardrail_violation(client: TestClient) -> None:
     assert any(
         violation["category"] == "payment_data" for violation in body["meta"]["guardrail_violations"]
     )
-
-
 @pytest.mark.parametrize(
     "message,expected_categories",
     [
