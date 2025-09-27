@@ -111,7 +111,67 @@ agent-workflow/
 - Ajuste `FRONTEND_ALLOWED_ORIGINS` no backend para liberar o domínio do frontend.
 - **Quando aciona**: o SupportAgent v2 sinaliza escalation_suggested=true ou o usuario pede explicitamente um humano; o sistema registra pedido no HandoffFlow e pergunta: “Posso acionar suporte humano no Slack? Responda ‘sim’ para confirmar.”
 - **Confirmacao obrigatoria**: respostas afirmativas (sim, pode, “quero falar com humano” etc.) aciona o SlackAgent; negativas cancelam o pedido e mensagens ambiguas geram um novo lembrete curto.
-- **SlackAgent**: monta payload mascarando PII, limita summary/details, define titulo [SUPPORT ESCALATION] #<ticket> <categoria>/<prioridade>, envia via SlackClient (mock por padrao) e registra metricas (handoff_attempt_total, success, ailed, latencia media/p95).
+- **Validacao manual**: 1) enviar caso critico em /chat ? resposta pede confirmacao ? responder sim com handoff_token ? meta retorna handoff_status="ok" e handoff_message_id; 2) enviar “Quero falar com humano” ? confirmacao ? SlackAgent executa; acompanhar logs slack.handoff.* sem PII.
+
+## Etapa 12 — Containerização e Deploy
+
+A etapa 12 empacota todo o ecossistema (FastAPI + agentes + observabilidade + frontend React) em contêineres prontos para desenvolvimento local com Docker Compose e deploy em serviços gerenciados como Render, Vercel ou Netlify.
+
+### Pré-requisitos
+
+- Docker e Docker Compose instalados.
+- Arquivo de variáveis do backend pronto: copie `agent-workflow/.env.example` para `agent-workflow/.env` e ajuste as chaves (ex.: `OPENAI_API_KEY`).
+- (Opcional) Arquivo `.env` para o frontend com `VITE_API_BASE_URL` caso deseje builds fora do Compose.
+
+### Build das imagens individuais
+
+```bash
+docker build -f Dockerfile.backend -t agent-backend .
+docker build -f Dockerfile.frontend -t agent-frontend .
+```
+
+As imagens acima executam o backend via `uvicorn app.main:app` na porta `8000` e servem o bundle estático do frontend por Nginx na porta `80`.
+
+### Executando tudo com Docker Compose
+
+```bash
+docker compose up --build
+```
+
+- Backend disponível em `http://localhost:8000/health`.
+- Frontend servido em `http://localhost` (mapeado para a porta 80 do contêiner Nginx).
+- Os serviços compartilham a rede interna `agentnet`, permitindo que o frontend use `http://backend:8000` como base (`VITE_API_BASE_URL`).
+- O volume `./data:/app/agent-workflow/data` mantém arquivos de suporte gerados pelo backend durante o desenvolvimento.
+
+Quando terminar, execute `docker compose down` para encerrar e `docker compose down -v` se quiser remover volumes.
+
+### Deploy do backend (Render)
+
+1. Crie um novo serviço **Web Service** no Render, apontando para este repositório.
+2. Escolha a opção **Docker** e informe `Dockerfile.backend` como arquivo da imagem.
+3. Defina o comando padrão como `uvicorn app.main:app --host 0.0.0.0 --port 8000` (Render detecta automaticamente, mas deixe explícito se preferir).
+4. Configure as variáveis de ambiente no painel (ou faça upload do arquivo `.env` via Secrets Manager).
+5. Após o deploy, valide `https://<seu-servico>.onrender.com/health` para garantir que o backend respondeu `status: ok`.
+
+### Deploy do frontend (Vercel/Netlify ou contêiner único)
+
+**Vercel / Netlify (build estática):**
+
+1. Crie um novo projeto apontando para a pasta `frontend/`.
+2. Configure as variáveis de ambiente de build com `VITE_API_BASE_URL=https://<backend-publico>`.
+3. Use o comando de build padrão `npm run build` (Vercel/Netlify já inferem automaticamente).
+4. Após a publicação, acesse o domínio gerado e valide a interface (a página **Status** deve consumir o endpoint `/health` do backend público).
+
+**Alternativa (contêiner único):**
+
+- Em um servidor próprio, basta rodar `docker compose up -d` e expor as portas 80 (frontend) e 8000 (backend) conforme necessário. Ajuste `FRONTEND_ALLOWED_ORIGINS` no backend para incluir o domínio externo que irá servir o frontend.
+
+### Checklist pós-deploy
+
+- ✅ Backend responde `GET /health` com `status: ok`.
+- ✅ Frontend carrega e utiliza o backend para `/chat`, `/status` e `/metrics`.
+- ✅ Logs e métricas continuam disponíveis conforme configurado nas etapas anteriores.
+ailed, latencia media/p95).
 - **Guardrails**: nada de PII crua; logs trazem apenas message_id, channel, correlation_id; erros retornam handoff_status="failed" sem detalhar excecoes; com Slack desabilitado o agente responde handoff_status="disabled" de forma cordial.
 - **Metadados do /chat**: handoff_channel, handoff_status, handoff_message_id, handoff_token, 	icket_id, category, priority e handoff_request (token + expiracao) quando aguardando confirmacao.
 - **Variaveis**: SLACK_ENABLED, SLACK_MODE (mock|eal), SLACK_WEBHOOK_URL/SLACK_BOT_TOKEN, SLACK_DEFAULT_CHANNEL, SLACK_TIMEOUT_SECONDS, SLACK_MAX_RETRIES, HANDOFF_CONFIRM_TTL_SECONDS, HANDOFF_SUMMARY_MAX_CHARS, HANDOFF_DETAILS_MAX_CHARS, PII_MASKING_ENABLED.
