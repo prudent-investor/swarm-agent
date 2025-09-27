@@ -24,11 +24,11 @@ def test_normaliser_removes_accents_and_symbols(monkeypatch):
     monkeypatch.setattr(settings, "guardrails_normalize_remove_accents", True)
     monkeypatch.setattr(settings, "guardrails_normalize_strip_symbols", "~,^,\\u00b4,\\u00b8,`")
 
-    original = "Café façade naïve coöperative résumé: rôle in action?"
+    original = "Café façade naïve coöperative résumé: rôle em ação e coração?"
     normalised, changed = normalise_text(original)
 
     assert changed is True
-    assert normalised == "Cafe facade naive cooperative resume: role in action?"
+    assert normalised == "Cafe facade naive cooperative resume: role em acao e coracao?"
     normalised_twice, changed_twice = normalise_text(normalised)
     assert normalised_twice == normalised
     assert changed_twice is False
