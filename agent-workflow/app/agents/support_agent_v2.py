@@ -26,7 +26,7 @@ class CustomerSupportAgent(Agent):
             raise AgentControlledError(
                 error="support_agent_unavailable",
                 status_code=503,
-                details="Nao foi possivel processar o atendimento de suporte.",
+                details="We could not process the support request at this time.",
                 agent=self.name,
             ) from exc
 
@@ -60,8 +60,8 @@ class CustomerSupportAgent(Agent):
             meta.update(ticket_meta)
             citations = [
                 {
-                    "title": "Ticket de suporte",
-                    "url": "https://www.infinitepay.io/suporte",
+                    "title": "Support ticket",
+                    "url": "https://www.infinitepay.io/support",
                     "source_type": "infinitepay",
                 }
             ]
@@ -76,8 +76,8 @@ class CustomerSupportAgent(Agent):
 
 def _compose_ticket_response(ticket) -> tuple[str, dict]:
     parts = [
-        f"Registrei seu atendimento com o numero {ticket.id}.",
-        f"Categoria: {ticket.category.title()} | Prioridade: {ticket.priority.title()}.",
+        f"I have registered your request with ticket number {ticket.id}.",
+        f"Category: {ticket.category.title()} | Priority: {ticket.priority.title()}.",
     ]
     meta: dict = {
         "ticket_summary": ticket.summary,
@@ -85,7 +85,7 @@ def _compose_ticket_response(ticket) -> tuple[str, dict]:
     }
     if ticket.escalation:
         parts.append(
-            "Identificamos impacto elevado. Posso acionar um especialista humano via Slack para acelerar o atendimento? Responda 'sim' para confirmar ou 'nao' para continuar por aqui."
+            "We identified a high impact. May I involve a human specialist on Slack to accelerate the follow-up? Reply 'yes' to confirm or 'no' to continue here."
         )
         meta.update(
             {
@@ -95,7 +95,7 @@ def _compose_ticket_response(ticket) -> tuple[str, dict]:
             }
         )
     else:
-        parts.append("Nossa equipe entrara em contato em breve com atualizacoes.")
+        parts.append("Our team will reach out soon with updates.")
     return " ".join(parts), meta
 
 

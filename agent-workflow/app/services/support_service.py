@@ -183,7 +183,7 @@ def _build_summary(message: str) -> str:
     text = (message or "").strip().split(".")[0]
     if len(text) > 120:
         text = text[:117] + "..."
-    return text or "Suporte"
+    return text or "Support"
 
 
 def _normalise_description(message: str) -> str:

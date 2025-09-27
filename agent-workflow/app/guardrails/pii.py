@@ -30,14 +30,26 @@ def mask_text(text: str) -> Tuple[str, bool, List[str]]:
             _append_reason(reasons, "personal_identifiers", "email")
 
     if settings.pii_mask_phone:
-        if PHONE_RE.search(masked):
+        phone_matches = list(PHONE_RE.finditer(masked))
+        phone_replacements = False
+        for match in reversed(phone_matches):
+            if _should_skip_phone_mask(masked, match):
+                continue
             flagged = True
-            masked = PHONE_RE.sub(_mask_phone, masked)
+            phone_replacements = True
+            masked = masked[: match.start()] + _mask_phone(match) + masked[match.end():]
+        if phone_replacements:
             _append_reason(reasons, "personal_identifiers", "phone")
 
-    if CARD_RE.search(masked):
+    card_matches = list(CARD_RE.finditer(masked))
+    card_replacements = False
+    for match in reversed(card_matches):
+        if _should_skip_card_mask(masked, match):
+            continue
         flagged = True
-        masked = CARD_RE.sub(_mask_card_number, masked)
+        card_replacements = True
+        masked = masked[: match.start()] + _mask_card_number(match) + masked[match.end():]
+    if card_replacements:
         _append_reason(reasons, "payment_data", "card_number")
 
     if SSN_RE.search(masked):
@@ -61,6 +73,15 @@ def _mask_phone(match: re.Match[str]) -> str:
     suffix = digits[-2:]
     return f"{prefix}{suffix}"
 
+def _should_skip_phone_mask(text: str, match: re.Match[str]) -> bool:
+    return _has_ticket_prefix(text, match)
+
+def _should_skip_card_mask(text: str, match: re.Match[str]) -> bool:
+    return _has_ticket_prefix(text, match)
+
+def _has_ticket_prefix(text: str, match: re.Match[str]) -> bool:
+    prefix = text[: match.start()]
+    return bool(re.search(r"[A-Z]{3,}-$", prefix))
 
 def _mask_card_number(match: re.Match[str]) -> str:
     digits = re.sub(r"\D", "", match.group(0))

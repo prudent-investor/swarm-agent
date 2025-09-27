@@ -10,8 +10,11 @@ from app.settings import settings
 @dataclass(frozen=True)
 class InjectionPattern:
     value: str
+    is_regex: bool = False
 
     def regex(self) -> re.Pattern[str]:
+        if self.is_regex:
+            return re.compile(self.value, re.IGNORECASE)
         return re.compile(re.escape(self.value), re.IGNORECASE)
 
 
@@ -26,6 +29,11 @@ _DEFAULT_PATTERNS: Tuple[InjectionPattern, ...] = (
     InjectionPattern("reveal password"),
     InjectionPattern("leak secrets"),
     InjectionPattern("override guardrails"),
+    InjectionPattern(r"\bignore\b.*\binstruc\w*", True),
+    InjectionPattern(r"\bignore\b.*\banter\w*", True),
+    InjectionPattern(r"\bcomply\b.*\boverride\b", True),
+    InjectionPattern(r"\bypass\b.*\bsecurity\b", True),
+
 )
 
 

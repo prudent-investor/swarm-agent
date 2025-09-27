@@ -16,10 +16,24 @@ class ModerationRule:
 _BALANCED_DEFAULT: Tuple[ModerationRule, ...] = (
     ModerationRule("hate speech", "hate_speech", "Detected hateful or discriminatory content."),
     ModerationRule("racist", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("nazi", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("heil hitler", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("national socialism", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("nacional-socialismo", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("death to minorities", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("kill minorities", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("exterminate minorities", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("morte as minorias", "hate_speech", "Detected hateful or discriminatory content."),
+    ModerationRule("white power", "hate_speech", "Detected hateful or discriminatory content."),
     ModerationRule("sexual content", "erotic_content", "Detected explicit sexual content."),
     ModerationRule("explicit sexual", "erotic_content", "Detected explicit sexual content."),
+    ModerationRule("anal sex", "erotic_content", "Detected explicit sexual content."),
+    ModerationRule("sex anal", "erotic_content", "Detected explicit sexual content."),
     ModerationRule("malware", "system_abuse", "Detected a request for malicious tooling."),
     ModerationRule("password", "system_access", "Detected a request for protected credentials."),
+    ModerationRule("system password", "system_access", "Detected a request for protected credentials."),
+    ModerationRule("senha do sistema", "system_access", "Detected a request for protected credentials."),
+
 )
 
 _STRICT_EXTRA: Tuple[ModerationRule, ...] = (
