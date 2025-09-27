@@ -1,0 +1,10 @@
+{
+  "run_id": "52d19228ba7d4990a8d4bd4f6623b74a",
+  "timestamp": "2025-09-27T16:47:44Z",
+  "total_urls": 2,
+  "processed_documents": 2,
+  "chunks_created": 18,
+  "embedded_chunks": 0,
+  "index_items": 18,
+  "dry_run": false
+}

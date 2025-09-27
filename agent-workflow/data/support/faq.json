@@ -1,0 +1,42 @@
+﻿[
+  {
+    "id": "faq-001",
+    "pergunta": "Como acompanhar o recebimento de um pagamento?",
+    "resposta": "Voce pode acompanhar seus recebimentos no app em Relatorios > Pagamentos. Caso algo pareca atrasado, confirme o horario previsto e atualize o aplicativo.",
+    "tags": ["pagamento", "recebimento", "relatorio"],
+    "categoria": "pagamentos",
+    "atualizado_em": "2025-08-01"
+  },
+  {
+    "id": "faq-002",
+    "pergunta": "O que fazer quando ha cobranca duplicada?",
+    "resposta": "Verifique se o comprovante foi emitido duas vezes. Se confirmar a duplicidade, oriente o cliente a contestar e acione nossa equipe pelo chat mencionando 'cobranca duplicada'.",
+    "tags": ["cobranca", "duplicada", "pagamento"],
+    "categoria": "pagamentos",
+    "atualizado_em": "2025-07-18"
+  },
+  {
+    "id": "faq-003",
+    "pergunta": "Esqueci minha senha de acesso, como recuperar?",
+    "resposta": "Na tela inicial escolha 'Esqueci minha senha'. Enviaremos um codigo por email cadastrado. Caso nao receba, confira a caixa de spam e tente novamente em alguns minutos.",
+    "tags": ["senha", "acesso", "login"],
+    "categoria": "acesso",
+    "atualizado_em": "2025-06-30"
+  },
+  {
+    "id": "faq-004",
+    "pergunta": "Minha maquininha esta sem conexao, e agora?",
+    "resposta": "Reinicie o equipamento, confirme o Wi-Fi ou dados moveis e teste outra rede. Persistindo, abra um ticket informando o modelo e sinal.",
+    "tags": ["maquininha", "pos", "conexao"],
+    "categoria": "dispositivo",
+    "atualizado_em": "2025-09-10"
+  },
+  {
+    "id": "faq-005",
+    "pergunta": "Como atualizar os dados cadastrais?",
+    "resposta": "Acesse Perfil > Dados da empresa, edite as informacoes e envie os documentos solicitados. A validacao ocorre em ate 1 dia util.",
+    "tags": ["conta", "cadastro", "perfil"],
+    "categoria": "conta",
+    "atualizado_em": "2025-08-22"
+  }
+]
