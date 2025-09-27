@@ -1,0 +1,26 @@
+[
+  {
+    "id": "faq-1",
+    "pergunta": "Como funciona a maquininha InfinitePay?",
+    "resposta": "A maquininha InfinitePay aceita pagamentos no credito, debito e Pix com taxas competitivas e recebimento rapido via conta digital.",
+    "tags": ["maquininha", "pagamento", "terminal"],
+    "categoria": "dispositivo",
+    "atualizado_em": "2024-01-10T00:00:00Z"
+  },
+  {
+    "id": "faq-2",
+    "pergunta": "Como antecipar recebimentos?",
+    "resposta": "Use a funcao Receba na Hora no app InfinitePay para antecipar suas vendas com custo reduzido.",
+    "tags": ["receba na hora", "antecipacao", "pagamento"],
+    "categoria": "pagamentos",
+    "atualizado_em": "2024-02-15T00:00:00Z"
+  },
+  {
+    "id": "faq-3",
+    "pergunta": "Perdi acesso ao app. Como recuperar?",
+    "resposta": "Toque em Esqueci minha senha na tela de login e siga o passo a passo para redefinir com o email cadastrado.",
+    "tags": ["acesso", "login", "senha"],
+    "categoria": "acesso",
+    "atualizado_em": "2024-03-05T00:00:00Z"
+  }
+]
