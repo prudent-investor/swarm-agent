@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
@@ -16,6 +16,12 @@ class Route(str, Enum):
 class RoutingDecision(BaseModel):
     route: Route
     hint: Optional[str] = Field(default=None, description="Optional hint to refine downstream handling.")
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence score provided by the router (0-1).",
+    )
 
 
 class RoutingRequest(BaseModel):
@@ -38,7 +44,14 @@ class AgentResponse(BaseModel):
 class AgentControlledError(Exception):
     """Raised by agents when a predictable failure occurs (e.g. validation issues)."""
 
-    def __init__(self, *, error: str, status_code: int = 400, details: Optional[str] = None, agent: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        *,
+        error: str,
+        status_code: int = 400,
+        details: Optional[str] = None,
+        agent: Optional[str] = None,
+    ) -> None:
         super().__init__(error)
         self.error = error
         self.details = details

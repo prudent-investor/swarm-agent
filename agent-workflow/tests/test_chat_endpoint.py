@@ -11,12 +11,14 @@ class DummyRouter:
     def route_message(self, message: str) -> RoutingDecision:
         text = message.lower()
         if "politica" in text:
-            return RoutingDecision(route=Route.knowledge, hint="docs")
+            return RoutingDecision(route=Route.knowledge, hint="docs", confidence=0.85)
         if "pagamento" in text:
-            return RoutingDecision(route=Route.support, hint="support")
+            return RoutingDecision(route=Route.support, hint="support", confidence=0.8)
+        if "incerto" in text or "incert" in text or "uncertain" in text:
+            return RoutingDecision(route=Route.knowledge, hint="docs", confidence=0.2)
         if "humano" in text:
-            return RoutingDecision(route=Route.slack, hint="handoff")
-        return RoutingDecision(route=Route.custom, hint="custom")
+            return RoutingDecision(route=Route.slack, hint="handoff", confidence=1.0)
+        return RoutingDecision(route=Route.custom, hint="custom", confidence=0.6)
 
 
 class StubAgent:
@@ -78,6 +80,7 @@ def test_chat_endpoint_routes_to_expected_agent(client: TestClient, message: str
     assert payload["meta"]["route"] in {route.value for route in Route}
     assert "latency_ms" in payload["meta"]
     assert payload["correlation_id"]
+    assert payload["meta"]["correlation_id"] == payload["correlation_id"]
 
 
 def test_chat_endpoint_rejects_invalid_payload(client: TestClient) -> None:
@@ -89,7 +92,7 @@ def test_chat_endpoint_rejects_invalid_payload(client: TestClient) -> None:
 
 def test_chat_guardrails_meta_flags(client: TestClient) -> None:
     response = client.post(
-        "/chat", json={"message": "Quero falar com o cartão humano", "user_id": "cli-10"}
+        "/chat", json={"message": "Quero falar com o cart\u00e3o humano", "user_id": "cli-10"}
     )
 
     assert response.status_code == 200
@@ -100,3 +103,29 @@ def test_chat_guardrails_meta_flags(client: TestClient) -> None:
     assert meta["guardrails_accents_stripped"] is True
     assert meta.get("moderation_blocked") is False
     assert meta.get("guardrails_pre_ms") is not None
+
+
+def test_chat_redirects_on_low_confidence(monkeypatch, client: TestClient) -> None:
+    monkeypatch.setattr(settings, "guardrails_redirect_always", False)
+    payload = {"message": "Tenho uma duvida incerta", "user_id": "cli-low"}
+    response = client.post("/chat", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["agent"] == "redirect"
+    assert body["meta"]["redirect_reason"] == "low_confidence"
+    assert body["meta"]["ticket_id"].startswith("HUM-")
+    assert body["meta"]["redirected"] is True
+    assert body["meta"]["correlation_id"] == body["correlation_id"]
+
+
+def test_chat_routes_to_slack_agent(client: TestClient) -> None:
+    response = client.post("/chat", json={"message": "Preciso falar com humano", "user_id": "cli-handoff"})
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["agent"] == "slack"
+    assert payload["meta"]["route"] == Route.slack.value
+    assert payload["meta"]["correlation_id"] == payload["correlation_id"]
