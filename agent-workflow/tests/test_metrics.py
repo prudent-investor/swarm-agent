@@ -53,7 +53,7 @@ def metrics_client() -> TestClient:
 
 
 def test_metrics_endpoint_reports_counters(metrics_client: TestClient) -> None:
-    chat_response = metrics_client.post("/chat", json={"message": "olá", "user_id": "client"})
+    chat_response = metrics_client.post("/chat", json={"message": "hello", "user_id": "client"})
     assert chat_response.status_code == 200
     correlation_id = chat_response.json()["correlation_id"]
 
@@ -80,7 +80,7 @@ def test_metrics_latency_bucket_for_slow_request(metrics_client: TestClient, mon
 
     monkeypatch.setattr("app.observability.tracing.time", FakeTimer())
 
-    chat_response = metrics_client.post("/chat", json={"message": "ola lento", "user_id": "client"})
+    chat_response = metrics_client.post("/chat", json={"message": "slow hello", "user_id": "client"})
     assert chat_response.status_code == 200
     correlation_id = chat_response.json()["correlation_id"]
 

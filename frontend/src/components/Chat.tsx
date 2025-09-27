@@ -139,7 +139,7 @@ function Chat(): JSX.Element {
           <div>
             <h1 className="text-2xl font-semibold text-gold">Conversational Console</h1>
             <p className="text-sm text-slate-400">
-              Converse com os agentes inteligentes, acompanhe redirecionamentos e monitore correlação.
+              Chat with the autonomous agents, inspect reroutes, and monitor correlation identifiers.
             </p>
           </div>
           <button
@@ -147,16 +147,16 @@ function Chat(): JSX.Element {
             onClick={handleNewChat}
             className="rounded-full border border-gold/70 px-4 py-2 text-sm font-medium text-gold transition hover:-translate-y-[1px] hover:bg-gold/10"
           >
-            Novo Chat
+            New chat
           </button>
         </div>
         <div className="flex max-h-[520px] flex-col gap-4 overflow-y-auto pr-2">
           {messages.length === 0 ? (
             <div className="flex h-60 items-center justify-center rounded-2xl border border-dashed border-slate-700/60 bg-slate-900/40">
               <div className="text-center text-slate-400">
-                <p className="font-medium">Comece uma nova conversa</p>
+                <p className="font-medium">Start a new conversation</p>
                 <p className="text-sm">
-                  Faça perguntas de conhecimento, suporte, integrações customizadas ou solicite atendimento humano.
+                  Ask for product knowledge, support diagnostics, custom integrations, or escalate to a human agent.
                 </p>
               </div>
             </div>
@@ -167,7 +167,7 @@ function Chat(): JSX.Element {
             <div className="flex justify-start">
               <div className="flex items-center gap-3 rounded-2xl bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
                 <span className="h-3 w-3 animate-ping rounded-full bg-gold/80" aria-hidden />
-                <span>Processando solicitação…</span>
+                <span>Processing request…</span>
               </div>
             </div>
           )}
@@ -179,24 +179,24 @@ function Chat(): JSX.Element {
         )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <label htmlFor="chat-input" className="text-xs uppercase tracking-[0.3em] text-slate-500">
-            Sua mensagem
+            Your message
           </label>
           <textarea
             id="chat-input"
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Digite uma mensagem…"
+            placeholder="Type a message…"
             rows={3}
             className="w-full resize-none rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-gold/60 focus:ring-2 focus:ring-gold/30"
           />
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-500">Conectado a {API_BASE_URL}</p>
+            <p className="text-xs text-slate-500">Connected to {API_BASE_URL}</p>
             <button
               type="submit"
               disabled={!canSend}
               className="rounded-full bg-gold px-5 py-2 text-sm font-semibold text-midnight transition enabled:hover:-translate-y-[1px] enabled:hover:bg-gold/90 disabled:cursor-not-allowed disabled:bg-slate-600/50 disabled:text-slate-300/60"
             >
-              {state === "loading" ? "Enviando…" : "Enviar"}
+              {state === "loading" ? "Sending…" : "Send"}
             </button>
           </div>
         </form>

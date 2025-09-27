@@ -14,15 +14,15 @@ def test_build_slack_message_masks_pii(monkeypatch):
     monkeypatch.setattr(settings, "pii_masking_enabled", True)
     context = SlackContext(
         channel="#test",
-        title="[SUPPORT ESCALATION] #TICK PAGAMENTOS/HIGH",
-        summary="Cliente com email teste@example.com pediu contato",
-        details="Telefone +55 11 91234-5678 esta sem sinal",
+        title="[SUPPORT ESCALATION] #TICK PAYMENTS/HIGH",
+        summary="Customer with email test@example.com requested a follow-up",
+        details="Phone +55 11 91234-5678 is unreachable",
         ticket_id="SUP-1",
-        category="pagamentos",
+        category="payments",
         priority="high",
         correlation_id="corr-123",
         links=["https://example.com/ticket/SUP-1"],
-        requested_by="cliente@example.com",
+        requested_by="customer@example.com",
     )
     message = build_slack_message(context)
     assert "***@" in message.text
@@ -45,23 +45,23 @@ def test_slack_agent_disabled_flow(monkeypatch):
         correlation_id="corr-x",
         user_id="user-1",
         ticket_id="SUP-123",
-        category="pagamentos",
+        category="payments",
         priority="high",
-        summary="Resumo",
-        details="Detalhes",
+        summary="Summary",
+        details="Details",
         source="unit",
     )
     monkeypatch.setattr(settings, "slack_enabled", False)
     agent = SlackAgent(slack_client=MockSlackClient(), handoff_flow=flow)
     request = AgentRequest(
-        message="sim",
+        message="yes",
         user_id="user-1",
         metadata={"correlation_id": "corr-2", "handoff_token": pending.token},
     )
     response = agent.run(request)
     assert response.meta["handoff_status"] == "disabled"
     assert response.meta["ticket_id"] == "SUP-123"
-    assert "temporariamente indisponivel" in response.content.lower()
+    assert "temporarily unavailable" in response.content.lower()
 
 
 def test_slack_agent_request_creates_pending(monkeypatch):
@@ -69,13 +69,13 @@ def test_slack_agent_request_creates_pending(monkeypatch):
     monkeypatch.setattr(settings, "slack_enabled", True)
     agent = SlackAgent(slack_client=MockSlackClient(), handoff_flow=flow)
     request = AgentRequest(
-        message="Quero falar com humano",
+        message="I want to speak with a human",
         user_id="user-5",
         metadata={
             "correlation_id": "corr-req",
             "handoff_action": "request",
-            "handoff_summary": "Preciso falar com humano",
-            "handoff_details": "Detalhes do problema",
+            "handoff_summary": "Need to speak with a human",
+            "handoff_details": "Problem details",
             "handoff_source": "test",
         },
     )
