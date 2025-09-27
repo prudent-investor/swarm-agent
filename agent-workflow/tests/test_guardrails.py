@@ -101,6 +101,93 @@ def test_moderation_blocks_hate_speech_variants(monkeypatch):
     assert "I cannot comply" in moderated
 
 
+_EXPECTED_BLOCKLIST_DESCRIPTIONS = {
+    "destroy the government": "Detected threats against governmental institutions or public safety.",
+    "destroy the goverment": "Detected threats against governmental institutions or public safety.",
+    "kill your": "Detected threats to kill or seriously harm another person.",
+    "kill them": "Detected threats to kill or seriously harm another person.",
+    "kill you": "Detected threats to kill or seriously harm another person.",
+    "kill everyone": "Detected threats to kill or seriously harm multiple people.",
+    "kill everybody": "Detected threats to kill or seriously harm multiple people.",
+    "kill all of you": "Detected threats to kill or seriously harm multiple people.",
+    "matar voce": "Detected threats to kill or seriously harm another person.",
+    "matar você": "Detected threats to kill or seriously harm another person.",
+    "matar sua": "Detected threats to kill or seriously harm another person.",
+    "matar sua familia": "Detected threats to kill or seriously harm multiple people.",
+    "matar sua família": "Detected threats to kill or seriously harm multiple people.",
+    "matar todos": "Detected threats to kill or seriously harm multiple people.",
+    "matar todo mundo": "Detected threats to kill or seriously harm multiple people.",
+    "matar voces": "Detected threats to kill or seriously harm multiple people.",
+    "matar vocês": "Detected threats to kill or seriously harm multiple people.",
+    "burn down": "Detected threats involving arson or fire.",
+    "set on fire": "Detected threats involving arson or fire.",
+    "set fire": "Detected threats involving arson or fire.",
+    "put fire": "Detected threats involving arson or fire.",
+    "queimar": "Detected threats involving arson or fire.",
+    "fuck you": "Detected abusive or harassing language.",
+    "fuck off": "Detected abusive or harassing language.",
+    "fuck your": "Detected abusive or harassing language.",
+    "fuck yourself": "Detected abusive or harassing language.",
+    "asshole": "Detected abusive or harassing language.",
+    "bitch": "Detected abusive or harassing language.",
+    "son of a bitch": "Detected abusive or harassing language.",
+    "son of bitch": "Detected abusive or harassing language.",
+    "son of beach": "Detected abusive or harassing language.",
+    "motherfucker": "Detected abusive or harassing language.",
+    "vai se foder": "Detected abusive or harassing language.",
+    "foda-se": "Detected abusive or harassing language.",
+    "filho da puta": "Detected abusive or harassing language.",
+}
+
+
+@pytest.mark.parametrize(
+    "message,expected_category,expected_trigger",
+    [
+        (
+            "I will destroy the government and put fire everywhere",
+            "violence",
+            "destroy the government",
+        ),
+        (
+            "Son of beach, I will kill your family",
+            "violence",
+            "kill your",
+        ),
+        (
+            "Fuck off asshole",
+            "abusive_language",
+            "fuck off",
+        ),
+        (
+            "I will fuck your mom",
+            "abusive_language",
+            "fuck your",
+        ),
+        (
+            "Eu vou matar vocês todos",
+            "violence",
+            "matar vocês",
+        ),
+    ],
+)
+def test_moderation_blocks_abusive_and_violent_terms(
+    monkeypatch, message, expected_category, expected_trigger
+):
+    monkeypatch.setattr(settings, "guardrails_mode", "balanced")
+    monkeypatch.setattr(settings, "guardrails_moderation_enabled", True)
+    monkeypatch.setattr(settings, "guardrails_moderation_blocklist_terms", "")
+
+    moderated, blocked, reason = moderate_text(message)
+
+    assert blocked is True
+    assert reason == {
+        "category": expected_category,
+        "trigger": expected_trigger,
+        "description": _EXPECTED_BLOCKLIST_DESCRIPTIONS[expected_trigger],
+    }
+    assert "I cannot comply" in moderated
+
+
 def test_guardrails_service_postprocess_truncates(monkeypatch):
     monkeypatch.setattr(settings, "guardrails_enabled", True)
     monkeypatch.setattr(settings, "guardrails_moderation_enabled", False)
