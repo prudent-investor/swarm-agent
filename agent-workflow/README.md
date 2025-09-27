@@ -141,6 +141,17 @@ agent-workflow/
 - `RAG_MAX_PAGES`, `RAG_MAX_DEPTH`: limites de crawling
 - `RAG_REQUEST_TIMEOUT`, `RAG_REQUEST_INTERVAL`: timeout e intervalo entre requisicoes
 - `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`: parametros de chunking
+- `REDIRECT_ENABLED`: ativa o mecanismo de redirecionamento automatico para humanos (padrao: true)
+- `REDIRECT_CONFIDENCE_THRESHOLD`: limiar minimo de confianca do roteador antes de acionar redirect (padrao: 0.3)
+- `GUARDRAILS_REDIRECT_ALWAYS`: quando true, toda conversa e encaminhada a humanos independentemente da confianca
+- `SLACK_AGENT_ENABLED`: habilita o agente de escalonamento humano simulado (padrao: true)
+- `SLACK_CHANNEL_DEFAULT`: canal destino utilizado pelo SlackAgent mock (padrao: support-humans)
+- `METRICS_ENABLED`: habilita o endpoint `/metrics` e a coleta de contadores/histogramas (padrao: true)
+- `LOG_FORMAT`: `json` (padrao) para logs estruturados ou `text` para formato legivel
+- `CORRELATION_ID_HEADER`: cabecalho utilizado para propagar correlation-id (padrao: X-Correlation-ID)
+- `READINESS_ENABLED`: habilita o endpoint `/readiness` (padrao: true)
+- `READINESS_CPU_THRESHOLD`: limite maximo de uso de CPU em porcentagem antes de sinalizar indisponibilidade (padrao: 90)
+- `READINESS_MEMORY_THRESHOLD_MB`: limite maximo de memoria em MB antes de sinalizar indisponibilidade (padrao: 1024)
 
 ## Proximos Passos
 - Etapa 5: conectar o KnowledgeAgent ao indice para recuperar contexto (RAG completo) e retornar citacoes.
@@ -227,3 +238,114 @@ agent-workflow/
 - Telemetria unificada: meta agrega guardrails_pre_ms, guardrails_post_ms, guardrails_total_ms, modo ativo e flags de PII/moderacao; contadores (guardrails_inputs_total, moderation_blocked_total, etc.) ficam acessiveis via GuardrailsService.metrics_snapshot().
 - Diagnostico opcional: habilite GUARDRAILS_DIAGNOSTICS_ENABLED=true e use GET /guardrails/diagnostics?query=... para inspecionar texto normalizado (mascarado), termos detectados e snapshot de contadores; desabilitado responde 404.
 - Cobertura: pytest --cov=app.guardrails --cov-report=term garante ~93% da camada de guardrails, cobrindo normalizacao, validacao, anti-injection, PII, moderacao e diagnostico.
+
+## Etapa 9 — Redirect & Slack Agent
+- Mecanismo human-in-the-loop: RedirectService avalia cada chamada ao `/chat` (exceto rotas `slack`). Se `GUARDRAILS_REDIRECT_ALWAYS=true`, se o roteador reportar `confidence` abaixo de `REDIRECT_CONFIDENCE_THRESHOLD` ou se a mensagem contiver pedido explicito por humano, a resposta e padronizada com `agent="redirect"`, motivo (`redirect_reason`) e `ticket_id` simulado.
+- Rota `slack`: o RouterAgent reconhece pedidos diretos como "quero falar com humano" e retorna `route="slack"`. Nesse caso o SlackAgent responde confirmando o encaminhamento para o canal configurado, mantendo o fluxo automatico sem acionar RedirectService.
+- SlackAgent mockado: implementado em `app/agents/slack_agent.py`, integra-se a um `HandoffFlow` em memoria e usa `MockSlackClient`. Nenhuma chamada externa e realizada; mensagens sao apenas registradas/logadas.
+- Controles por ENV: defina `SLACK_AGENT_ENABLED=false` para desligar o agente simulado ou ajuste `SLACK_CHANNEL_DEFAULT` para representar outro canal. O redirect pode ser desligado com `REDIRECT_ENABLED=false` ou forçado com `GUARDRAILS_REDIRECT_ALWAYS=true`.
+- Exemplos `/chat`:
+  - Pedido humano direto (`route=slack`):
+    ```json
+    {
+      "agent": "slack",
+      "content": "Acionei o time humano no canal support-humans. Eles vao acompanhar e retornar em breve.",
+      "meta": {
+        "route": "slack",
+        "channel": "support-humans",
+        "handoff_status": "forwarded",
+        "redirected": true
+      }
+    }
+    ```
+
+## Etapa 10 — Observabilidade e Métricas Globais
+- Endpoint `/metrics` (habilitado com `METRICS_ENABLED=true`) expõe contadores e histogramas no formato Prometheus. Exemplos:
+  ```
+  chat_requests_total{agent="knowledge"} 42
+  chat_redirect_total 3
+  guardrails_accents_stripped_total 5
+  chat_request_latency_ms_bucket{le="1000", correlation_id="abc123"} 1
+  ```
+  Use `curl http://localhost:8000/metrics` e configure o scraper do Prometheus apontando para o mesmo endpoint.
+- Endpoint `/readiness` (controlado por `READINESS_ENABLED`) valida dependências críticas:
+  - `openai_api_key`: chave presente.
+  - `embeddings_store`: índice em `data/rag/index` disponível quando `RAG_ENABLED=true`.
+  - `system_resources`: CPU e memória abaixo dos limites (`READINESS_CPU_THRESHOLD`, `READINESS_MEMORY_THRESHOLD_MB`).
+  Resposta `200` indica serviço pronto; falhas retornam `503` com detalhes por check.
+- Tracing com correlation-id:
+  - Cada request a `/chat` aceita `X-Correlation-ID`; se ausente, gera UUID.
+  - O ID aparece nos logs, em `meta.correlation_id` da resposta e no cabeçalho de saída.
+- Logs estruturados (default `LOG_FORMAT=json`):
+  ```json
+  {
+    "timestamp": "2024-05-10T12:34:56.789000+00:00",
+    "level": "info",
+    "message": "chat.success",
+    "correlation_id": "abc123",
+    "route": "knowledge",
+    "agent": "knowledge",
+    "latency_ms": 85.7,
+    "flags": {"accents_stripped": true, "pii_masked": false}
+  }
+  ```
+  Ajuste `LOG_FORMAT=text` para modo legível durante debug.
+- Boas práticas:
+  - Use o correlation-id em dashboards para rastrear uma conversa ponta a ponta.
+  - Combine `/metrics` com alertas de redirect alto ou latência fora do esperado.
+  - `/readiness` pode ser integrado ao load balancer/Kubernetes para remover instâncias degradadas.
+  - Confianca baixa (`redirect`):
+    ```json
+    {
+      "agent": "redirect",
+      "content": "Your request was redirected to a human agent. A support ticket has been created.",
+      "meta": {
+        "route": "knowledge",
+        "redirect_reason": "low_confidence",
+        "ticket_id": "HUM-20250101-001",
+        "channel": "support-humans",
+        "redirected": true
+      }
+    }
+    ```
+
+## Etapa 11 — Interface Web Customizada
+- Frontend React + Vite + TypeScript localizado em `frontend/`, estilizado com TailwindCSS e tema exclusivo (azul profundo + dourado).
+- O app consome a API existente (`/chat`, `/route`, `/health`, `/readiness`, `/metrics`) respeitando correlation-id e guardrails.
+- Componentes principais:
+  - **Chat Console**: histórico em forma de bolhas, agente destacado, citações clicáveis, ID de correlação exibido em cada resposta, botões "Novo Chat" e "Copiar" e spinner durante o processamento.
+  - **Status Page**: painéis para `/health` e `/readiness` com indicadores visuais de disponibilidade.
+  - **Metrics Page**: painel raw que exibe `/metrics` com atualização manual.
+- Experiência aprimorada:
+  - Histórico persistido em `localStorage` para manter o contexto após recarregar a página.
+  - Tratamento elegante de erros, alertas sutis e layout responsivo.
+  - Cabeçalho com navegação, logotipo "Agent Workflow" e rodapé institucional.
+
+### Executando o frontend
+1. `cd frontend`
+2. `npm install`
+3. Copie `.env.example` para `.env` e ajuste `VITE_API_BASE_URL` conforme o endpoint do backend (padrao: `http://127.0.0.1:8000`).
+4. `npm run dev` → acesse `http://localhost:5173`.
+
+### Build de produção
+- `npm run build` gera a pasta `dist/` pronta para deploy em Vercel, Netlify, Render ou ambientes estáticos equivalentes.
+- Opcional: `npm run preview` para validar a build localmente.
+
+### Ajustes no backend
+- Habilite CORS adicionando a origem do frontend em `FRONTEND_ALLOWED_ORIGINS` (ex.: `http://localhost:5173`).
+- Confirme que as variáveis da Etapa 10 permanecem ativas (`METRICS_ENABLED`, `READINESS_ENABLED`, etc.) para que os painéis funcionem.
+
+### Funcionalidades para validação manual
+1. "What are the fees of the Maquininha Smart?" → Knowledge Agent com citações visíveis.
+2. "I can’t sign in to my account." → Support Agent com meta de ticket.
+3. "I want to talk to a human." → Slack Agent ou redirect, destacando o canal humano.
+4. "Escreva um discurso de odio." → Guardrails bloqueiam/moderam a saída com alerta na interface.
+5. Página **Status** → valida `/health` e `/readiness`.
+6. Página **Metrics** → exibe exportação Prometheus completa.
+
+### Variáveis de ambiente relevantes
+- Frontend: `VITE_API_BASE_URL` (arquivo `frontend/.env`).
+- Backend: `FRONTEND_ALLOWED_ORIGINS` controla as origens liberadas para o navegador.
+
+### Capturas de tela
+- Recomenda-se registrar uma captura do console de chat em operação para documentação interna ou README públicos.

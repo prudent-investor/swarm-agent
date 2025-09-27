@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     redirect_confidence_threshold: float = 0.3
     guardrails_redirect_always: bool = False
     slack_agent_enabled: bool = True
-    slack_channel_default: str = support-humans
+    slack_channel_default: str = "support-humans"
 
     handoff_confirm_ttl_seconds: int = 300
     handoff_summary_max_chars: int = 280
@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     guardrails_moderation_enabled: bool = True
     guardrails_moderation_blocklist_terms: Optional[str] = None
     guardrails_diagnostics_enabled: bool = False
+
+    metrics_enabled: bool = True
+    log_format: str = "json"
+    correlation_id_header: str = "X-Correlation-ID"
+    readiness_enabled: bool = True
+    readiness_cpu_threshold: int = 90
+    readiness_memory_threshold_mb: int = 1024
+    frontend_allowed_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(
         env_file=".env",

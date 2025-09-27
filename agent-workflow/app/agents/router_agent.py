@@ -1,5 +1,6 @@
 ﻿import json
 import re
+import unicodedata
 from typing import Optional
 
 from openai import OpenAI
@@ -35,7 +36,12 @@ def _extract_text_from_response(response) -> Optional[str]:
 
 def _normalize(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", text or "")
-    return cleaned.strip().lower()
+    cleaned = cleaned.strip().lower()
+    if not cleaned:
+        return ""
+    decomposed = unicodedata.normalize("NFD", cleaned)
+    without_accents = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    return unicodedata.normalize("NFC", without_accents)
 
 
 class RouterAgent:
@@ -52,6 +58,21 @@ class RouterAgent:
         if self._client is None:
             self._client = OpenAI(api_key=self.api_key)
         return self._client
+
+    def _fallback_route(self, message: str) -> RoutingDecision:
+        text = _normalize(message)
+        if not text:
+            return RoutingDecision(route=Route.custom, hint="fallback_empty", confidence=None)
+
+        support_keywords = {"pagamento", "pagamentos", "fraude", "cobranca", "chargeback", "suporte"}
+        if any(keyword in text for keyword in support_keywords):
+            return RoutingDecision(route=Route.support, hint="fallback_support", confidence=0.4)
+
+        knowledge_keywords = {"politica", "privacidade", "privacy", "documentacao"}
+        if any(keyword in text for keyword in knowledge_keywords):
+            return RoutingDecision(route=Route.knowledge, hint="fallback_knowledge", confidence=0.4)
+
+        return RoutingDecision(route=Route.custom, hint="fallback_custom", confidence=0.3)
 
     def _match_direct_handoff(self, message: str) -> bool:
         text = _normalize(message)
@@ -71,6 +92,9 @@ class RouterAgent:
 
         if self._match_direct_handoff(message):
             return RoutingDecision(route=Route.slack, hint="user_requested_human", confidence=1.0)
+
+        if not self.api_key:
+            return self._fallback_route(message)
 
         client = self._get_client()
 
@@ -141,5 +165,6 @@ class RouterAgent:
 
         return RoutingDecision(route=route, hint=hint_value, confidence=confidence_value)
 
-outer_agent = RouterAgent()
+router_agent = RouterAgent()
+
 

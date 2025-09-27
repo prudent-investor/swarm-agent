@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from collections import defaultdict
 from typing import Dict, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.agents.base import (
     Agent,
@@ -24,6 +23,7 @@ from app.agents.router_agent import RouterAgent, router_agent as default_router_
 from app.agents.slack_agent import SlackAgent, get_slack_agent
 from app.agents.support_agent import CustomerSupportAgent
 from app.guardrails import get_guardrails_service
+from app.observability.metrics import get_metrics_registry
 from app.schemas import ChatRequest, ChatResponse, ChatResponseMeta, HandoffConfirmation
 from app.services.llm_provider import LLMProvider
 from app.services.rag import HeuristicReranker, QueryCache, RAGRetriever
@@ -35,8 +35,6 @@ from app.settings import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_CALL_COUNTER = defaultdict(int)
 _MAX_CONTENT_LENGTH = 2000
 
 _shared_retriever = RAGRetriever()
@@ -48,6 +46,7 @@ _handoff_flow: HandoffFlow = get_handoff_flow()
 _slack_agent = get_slack_agent()
 _guardrails_service = get_guardrails_service()
 _redirect_service = get_redirect_service()
+_metrics = get_metrics_registry()
 
 
 def _normalise_content(text: str) -> str:
@@ -112,6 +111,38 @@ def _apply_guardrail_meta(
     return meta
 
 
+def _guardrail_flags(meta: Dict[str, object]) -> Dict[str, object]:
+    return {
+        "accents_stripped": bool(meta.get("guardrails_accents_stripped")),
+        "injection_detected": bool(meta.get("guardrails_injection_detected")),
+        "pii_masked": bool(meta.get("guardrails_pii_masked")),
+        "moderation_blocked": bool(meta.get("moderation_blocked")),
+        "output_truncated": bool(meta.get("output_truncated")),
+    }
+
+
+def _log_event(
+    level: int,
+    message: str,
+    *,
+    correlation_id: str,
+    route: Optional[Route] = None,
+    agent: Optional[str] = None,
+    latency_ms: Optional[float] = None,
+    flags: Optional[Dict[str, object]] = None,
+    **extra: object,
+) -> None:
+    payload: Dict[str, object] = {
+        "correlation_id": correlation_id,
+        "route": route.value if isinstance(route, Route) else route,
+        "agent": agent,
+        "latency_ms": latency_ms,
+        "flags": flags or {},
+    }
+    payload.update(extra)
+    logger.log(level, message, extra=payload)
+
+
 def get_llm_provider() -> LLMProvider:
     return LLMProvider()
 
@@ -141,13 +172,12 @@ def _execute_agent(agent: Agent, request: AgentRequest, *, correlation_id: str) 
     try:
         return agent.run(request)
     except AgentControlledError as exc:
-        logger.warning(
+        _log_event(
+            logging.WARNING,
             "chat.agent_controlled_error",
-            extra={
-                "correlation_id": correlation_id,
-                "agent": exc.agent or getattr(agent, "name", "unknown"),
-                "error": exc.error,
-            },
+            correlation_id=correlation_id,
+            agent=exc.agent or getattr(agent, "name", "unknown"),
+            error=exc.error,
         )
         raise HTTPException(
             status_code=exc.status_code,
@@ -163,6 +193,9 @@ def _execute_agent(agent: Agent, request: AgentRequest, *, correlation_id: str) 
             extra={
                 "correlation_id": correlation_id,
                 "agent": getattr(agent, "name", "unknown"),
+                "route": None,
+                "latency_ms": None,
+                "flags": {},
             },
         )
         raise HTTPException(status_code=500, detail="Unexpected error while processing the request.") from exc
@@ -186,20 +219,21 @@ def _build_manual_response(
     meta_dict = _apply_guardrail_meta(meta_dict, pre_guardrail_flags, pre_guardrail_latency, post_result)
     meta_dict.setdefault("route", route.value)
     meta_dict["latency_ms"] = latency_ms
+    meta_dict["correlation_id"] = correlation_id
 
     content_final = _normalise_content(post_result.content)
     meta_model = ChatResponseMeta(**meta_dict)
 
-    _CALL_COUNTER[agent] += 1
-    logger.info(
+    _metrics.increment_chat_request(agent)
+    _log_event(
+        logging.INFO,
         "chat.success",
-        extra={
-            "correlation_id": correlation_id,
-            "agent": agent,
-            "route": route.value,
-            "latency_ms": latency_ms,
-            **_guardrail_log_fields(meta_dict),
-        },
+        correlation_id=correlation_id,
+        agent=agent,
+        route=route,
+        latency_ms=latency_ms,
+        flags=_guardrail_flags(meta_dict),
+        **_guardrail_log_fields(meta_dict),
     )
 
     return ChatResponse(
@@ -246,11 +280,12 @@ def _register_handoff(
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(
     payload: ChatRequest,
-    correlation_id_header: Optional[str] = Header(default=None, alias="X-Correlation-ID"),
+    request: Request,
     router_agent: RouterAgent = Depends(get_router_agent),
     agents: Dict[Route, Agent] = Depends(get_agents),
 ) -> ChatResponse:
-    correlation_id = correlation_id_header or str(uuid4())
+    correlation_id = getattr(request.state, "correlation_id", None) or str(uuid4())
+    request.state.correlation_id = correlation_id
     start = time.perf_counter()
 
     pre_guardrails = _guardrails_service.preprocess_input(
@@ -268,25 +303,35 @@ def chat_endpoint(
     if pre_guardrails.detected_injections:
         pre_flags["guardrails_injection_patterns"] = pre_guardrails.detected_injections
 
-    logger.info(
+    start_flags = {
+        "accents_stripped": pre_guardrails.flags.get("accents_stripped", False),
+        "injection_detected": pre_guardrails.flags.get("injection_detected", False),
+        "pii_masked": pre_guardrails.flags.get("pii_masked", False),
+        "moderation_blocked": False,
+        "output_truncated": False,
+    }
+    _log_event(
+        logging.INFO,
         "chat.start",
-        extra={
-            "correlation_id": correlation_id,
-            "user_id": (payload.user_id[:3] + "***") if payload.user_id else None,
-            "guardrails_mode": settings.guardrails_mode,
-            "guardrails_accents_stripped": pre_guardrails.flags.get("accents_stripped", False),
-            "guardrails_injection_detected": pre_guardrails.flags.get("injection_detected", False),
-            "guardrails_pii_masked": pre_guardrails.flags.get("pii_masked", False),
-            "guardrails_pre_ms": pre_guardrails.latency_ms,
-            "guardrails_masked_input_preview": masked_preview,
-        },
+        correlation_id=correlation_id,
+        route=None,
+        agent=None,
+        latency_ms=0.0,
+        flags=start_flags,
+        user_id=(payload.user_id[:3] + "***") if payload.user_id else None,
+        guardrails_mode=settings.guardrails_mode,
+        guardrails_pre_ms=pre_guardrails.latency_ms,
+        guardrails_masked_input_preview=masked_preview,
+        guardrails_accents_stripped=pre_guardrails.flags.get("accents_stripped", False),
+        guardrails_injection_detected=pre_guardrails.flags.get("injection_detected", False),
+        guardrails_pii_masked=pre_guardrails.flags.get("pii_masked", False),
     )
 
     metadata = payload.metadata or {}
 
     token = metadata.get("handoff_token")
     pending = _handoff_flow.fetch(
-        correlation_id=correlation_id_header,
+        correlation_id=correlation_id,
         user_id=payload.user_id,
         token=token,
     )
@@ -313,7 +358,7 @@ def chat_endpoint(
                 pre_guardrail_latency=pre_guardrails.latency_ms,
             )
         if classification == "deny":
-            _handoff_flow.clear(correlation_id=correlation_id_header, user_id=payload.user_id, token=token)
+            _handoff_flow.clear(correlation_id=correlation_id, user_id=payload.user_id, token=token)
             content = "Tudo bem, nao vou acionar suporte humano agora. Se mudar de ideia, e so me avisar."
             meta = {
                 "handoff_status": "cancelled",
@@ -378,11 +423,47 @@ def chat_endpoint(
     except RuntimeError as exc:
         logger.exception(
             "chat.routing_failed",
-            extra={"correlation_id": correlation_id},
+            extra={
+                "correlation_id": correlation_id,
+                "route": None,
+                "agent": None,
+                "latency_ms": None,
+                "flags": {},
+            },
         )
         raise HTTPException(status_code=502, detail="Intent router temporarily unavailable.") from exc
 
     route = decision.route
+
+    redirect_result = _redirect_service.evaluate(
+        message=processed_message,
+        route=route,
+        confidence=decision.confidence,
+        user_id=payload.user_id,
+        metadata=metadata,
+    )
+    if redirect_result:
+        _metrics.increment_redirect()
+        _log_event(
+            logging.INFO,
+            "chat.redirect",
+            correlation_id=correlation_id,
+            route=route,
+            agent=redirect_result.response.agent,
+            latency_ms=round((time.perf_counter() - start) * 1000, 2),
+            flags={},
+            redirect=True,
+            redirect_reason=redirect_result.reason,
+        )
+        return _finalise_response(
+            redirect_result.response,
+            route=route,
+            correlation_id=correlation_id,
+            start=start,
+            pre_guardrail_flags=pre_flags,
+            pre_guardrail_latency=pre_guardrails.latency_ms,
+        )
+
     agent = agents.get(route)
     if agent is None:
         agent = agents[Route.custom]
@@ -450,25 +531,26 @@ def _finalise_response(
 ) -> ChatResponse:
     post_result = _guardrails_service.postprocess_output(agent_response.content)
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
-    _CALL_COUNTER[agent_response.agent] += 1
 
     meta_dict = dict(agent_response.meta or {})
     meta_dict = _apply_guardrail_meta(meta_dict, pre_guardrail_flags, pre_guardrail_latency, post_result)
     meta_dict.setdefault("route", route.value)
     meta_dict["latency_ms"] = latency_ms
+    meta_dict["correlation_id"] = correlation_id
 
     content = _normalise_content(post_result.content)
     meta = ChatResponseMeta(**meta_dict)
 
-    logger.info(
+    _metrics.increment_chat_request(agent_response.agent)
+    _log_event(
+        logging.INFO,
         "chat.success",
-        extra={
-            "correlation_id": correlation_id,
-            "agent": agent_response.agent,
-            "route": route.value,
-            "latency_ms": latency_ms,
-            **_guardrail_log_fields(meta_dict),
-        },
+        correlation_id=correlation_id,
+        agent=agent_response.agent,
+        route=route,
+        latency_ms=latency_ms,
+        flags=_guardrail_flags(meta_dict),
+        **_guardrail_log_fields(meta_dict),
     )
 
     return ChatResponse(

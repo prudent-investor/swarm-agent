@@ -61,7 +61,7 @@ class SlackAgent(Agent):
 
         if action == "cancel":
             self._handoff.clear(correlation_id=correlation_id, user_id=payload.user_id, token=token)
-            content = "Tudo bem, seguimos por aqui. Se precisar escalar novamente, � so avisar."
+            content = "Tudo bem, seguimos por aqui. Se precisar escalar novamente, e so avisar."
             return self._response(content, meta={
                 "handoff_status": "cancelled",
                 "handoff_channel": "slack",
@@ -99,7 +99,7 @@ class SlackAgent(Agent):
         )
 
         meta = {
-            "handoff_status": "forwarded",
+            "handoff_status": "pending",
             "handoff_channel": "slack",
             "handoff_token": pending.token,
             "ticket_id": pending.ticket_id,
