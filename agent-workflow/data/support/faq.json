@@ -38,5 +38,13 @@
     "tags": ["conta", "cadastro", "perfil"],
     "categoria": "conta",
     "atualizado_em": "2025-08-22"
+  },
+  {
+    "id": "faq-006",
+    "pergunta": "Como emitir um boleto no InfinitePay?",
+    "resposta": "No app InfinitePay, toque em Cobrar > Boleto, informe o valor e os dados do cliente e confirme. O boleto pode ser compartilhado por link e o status aparece em Recebimentos.",
+    "tags": ["boleto", "emitir", "cobranca"],
+    "categoria": "cobranca",
+    "atualizado_em": "2025-09-20"
   }
 ]

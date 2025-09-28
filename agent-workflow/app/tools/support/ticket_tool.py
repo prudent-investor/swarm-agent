@@ -65,6 +65,7 @@ class TicketTool:
                     updated_at=datetime.fromisoformat(record["updated_at"]),
                     escalation=bool(record.get("escalation", False)),
                     internal_notes=record.get("internal_notes"),
+                    profile_snapshot=record.get("profile_snapshot"),
                 )
             except (KeyError, ValueError, TypeError) as exc:
                 logger.warning(
@@ -91,6 +92,7 @@ class TicketTool:
                 "updated_at": ticket.updated_at.isoformat(),
                 "escalation": ticket.escalation,
                 "internal_notes": ticket.internal_notes,
+                "profile_snapshot": ticket.profile_snapshot,
             }
             for ticket in self._tickets.values()
         ]
@@ -115,6 +117,7 @@ class TicketTool:
                 created_at=now,
                 updated_at=now,
                 escalation=request.escalation,
+                profile_snapshot=request.profile_snapshot,
             )
             self._tickets[ticket.id] = ticket
             try:

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "acct-001",
+    "triggers": [
+      "transferencia bloqueada",
+      "transferencias bloqueadas",
+      "transferencia bloqueado",
+      "transferencias bloqueado",
+      "transferencia travada",
+      "transferencias travadas"
+    ],
+    "status": "security_review",
+    "reason": "Uma análise automática identificou movimentação acima do padrão do seu CNPJ e precisamos validar a origem dos recursos.",
+    "limit": "R$ 50.000 por dia em TED/Pix",
+    "next_steps": "Envie no aplicativo os comprovantes das últimas vendas ou aguarde até 1 dia útil para a liberação automática após a confirmação.",
+    "url": "https://www.infinitepay.io/conta-digital"
+  }
+]

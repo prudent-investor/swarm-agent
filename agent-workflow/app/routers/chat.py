@@ -18,10 +18,10 @@ from app.agents.base import (
 )
 from app.agents.custom_agent import CustomAgent
 from app.agents.handoff_flow import HandoffFlow, PendingHandoff, get_handoff_flow
-from app.agents.knowledge_agent import KnowledgeAgent
+from app.agents.knowledge_agent_v2 import KnowledgeAgent
 from app.agents.router_agent import RouterAgent, router_agent as default_router_agent
 from app.agents.slack_agent import SlackAgent, get_slack_agent
-from app.agents.support_agent import CustomerSupportAgent
+from app.agents.support_agent_v2 import CustomerSupportAgent
 from app.guardrails import get_guardrails_service
 from app.guardrails.violations import GuardrailViolation
 from app.observability.metrics import get_metrics_registry

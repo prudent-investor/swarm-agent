@@ -33,6 +33,10 @@ class CustomerSupportAgent(Agent):
         faq_result = result["faq_result"]
         ticket = result["ticket"]
         policy = result["policy"]
+        account_status = result.get("account_status")
+        profile_masked = result.get("profile_masked")
+        profile_fields = result.get("profile_fields", [])
+        tools_used = result.get("tools_used", [])
 
         meta = {
             "faq_hit": bool(faq_result),
@@ -43,9 +47,25 @@ class CustomerSupportAgent(Agent):
             "support_latency_ms": result["latency_ms"],
             "faq_score": faq_result.score if faq_result else None,
             "faq_explanation": faq_result.explanation if faq_result else None,
+            "tools_used": tools_used,
         }
 
-        if faq_result:
+        if profile_masked:
+            meta["user_profile"] = profile_masked
+            if profile_fields:
+                meta["user_profile_fields"] = profile_fields
+
+        if account_status:
+            content = _compose_account_status_response(account_status)
+            citations = [
+                {
+                    "title": "Status da conta",
+                    "url": account_status.record.url,
+                    "source_type": "infinitepay",
+                }
+            ]
+            meta["account_status"] = account_status.as_dict()
+        elif faq_result:
             faq = faq_result.item
             content = faq.resposta
             citations = [
@@ -101,3 +121,16 @@ def _compose_ticket_response(ticket) -> tuple[str, dict]:
 
 def _normalise_answer(text: str) -> str:
     return " ".join((text or "").strip().split())
+
+
+def _compose_account_status_response(status: "AccountStatusResult") -> str:
+    details = status.record
+    lines = [
+        "Detectamos que suas transferências estão temporariamente bloqueadas por segurança.",
+        details.reason,
+    ]
+    if details.limit:
+        lines.append(f"Limite atual: {details.limit}.")
+    lines.append(details.next_steps)
+    lines.append("Liberaremos as transferências assim que a validação for concluída.")
+    return " ".join(line.strip() for line in lines if line)
