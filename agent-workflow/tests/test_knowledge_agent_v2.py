@@ -117,6 +117,45 @@ def test_knowledge_agent_handles_greetings_and_tracks_history():
     assert "ainda não encontrei" in second.content.lower()
 
 
+def test_knowledge_agent_switches_language_based_on_query():
+    cache = QueryCache(ttl_seconds=300)
+    agent = KnowledgeAgent(
+        provider=StubProvider("fallback"),
+        retriever=StubRetriever([]),
+        reranker=StubReranker(),
+        cache=cache,
+        web_search=StubWebSearch(),
+    )
+
+    portuguese = agent.run(AgentRequest(message="Oi", user_id="lang-pt"))
+    assert "Olá" in portuguese.content
+    assert portuguese.meta["response_language"] == "pt"
+
+    english = agent.run(AgentRequest(message="Hello", user_id="lang-en"))
+    assert "Hello" in english.content
+    assert english.meta["response_language"] == "en"
+
+
+def test_knowledge_agent_remembers_user_name():
+    cache = QueryCache(ttl_seconds=300)
+    agent = KnowledgeAgent(
+        provider=StubProvider("fallback"),
+        retriever=StubRetriever([]),
+        reranker=StubReranker(),
+        cache=cache,
+        web_search=StubWebSearch(),
+    )
+
+    first = agent.run(AgentRequest(message="Meu nome é Jefferson", user_id="client-name"))
+    assert "Jefferson" in first.content
+    assert first.meta["remembered_name"] is True
+
+    second = agent.run(AgentRequest(message="Lembra do meu nome ?", user_id="client-name"))
+    assert "Jefferson" in second.content
+    assert second.meta["remembered_name"] is True
+    assert second.meta["response_language"] == "pt"
+
+
 def test_knowledge_agent_cache_hit(sample_chunks):
     cache = QueryCache(ttl_seconds=300)
     agent = KnowledgeAgent(

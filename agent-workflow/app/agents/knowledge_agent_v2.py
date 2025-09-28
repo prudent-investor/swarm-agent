@@ -54,12 +54,33 @@ class KnowledgeAgent(Agent):
         user_id = payload.user_id
         history_key = f"user_history::{user_id}" if user_id else None
         previous_message = None
+        remembered_name = None
+        stored_history = None
         if history_key:
             stored_history = self._cache.get(history_key)
             if isinstance(stored_history, dict):
                 previous_message = stored_history.get("last_message")
+                name_value = stored_history.get("name")
+                if isinstance(name_value, str) and name_value.strip():
+                    remembered_name = name_value.strip()
 
         remembered_previous = bool(previous_message)
+        language = _detect_language(query)
+        extracted_name = _extract_name(query)
+        active_name = extracted_name or remembered_name
+
+        if _is_name_recall_question(query):
+            response = _name_recall_response(active_name, language)
+            response.meta.update(
+                {
+                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                    "remembered_name": bool(active_name),
+                    "response_language": language,
+                    "previous_message_remembered": remembered_previous,
+                }
+            )
+            self._record_user_message(history_key, query, name=active_name)
+            return response
 
         if not settings.rag_enabled:
             response = self._fallback_response(
@@ -68,9 +89,17 @@ class KnowledgeAgent(Agent):
                 rag_used=False,
                 web_search_used=False,
                 remembered_previous=remembered_previous,
+                remembered_name=active_name,
+                language=language,
             )
-            response.meta.update({"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)})
-            self._record_user_message(history_key, query)
+            response.meta.update(
+                {
+                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                    "remembered_name": bool(active_name),
+                    "response_language": language,
+                }
+            )
+            self._record_user_message(history_key, query, name=active_name)
             return response
 
         cache_key = normalised
@@ -108,9 +137,17 @@ class KnowledgeAgent(Agent):
                 rag_used=False,
                 web_search_used=False,
                 remembered_previous=remembered_previous,
+                remembered_name=active_name,
+                language=language,
             )
-            response.meta.update({"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)})
-            self._record_user_message(history_key, query)
+            response.meta.update(
+                {
+                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                    "remembered_name": bool(active_name),
+                    "response_language": language,
+                }
+            )
+            self._record_user_message(history_key, query, name=active_name)
             return response
 
         try:
@@ -123,19 +160,24 @@ class KnowledgeAgent(Agent):
                     context_snippets.append(snippet)
 
             composed_context = "\n\n".join(context_snippets)
+            language_label = "Portuguese" if language == "pt" else "English"
             system_prompt = (
                 "You are InfinitePay's KnowledgeAgent v2. Use only the provided context to answer. "
-                "Respond in English using 2 to 5 sentences and always cite the relevant sources. "
-                "If the context does not cover the request, be explicit about that."
+                f"Respond in {language_label} using 2 to 5 sentences and always cite the relevant sources. "
+                "If the context does not cover the request, be explicit about that. "
+                "When the user's preferred name is provided, acknowledge them naturally in that language."
             )
             conversation_lines = [f"Latest user message: {query}"]
             if previous_message:
                 conversation_lines.insert(0, f"Previous user message: {previous_message}")
+            if active_name:
+                conversation_lines.insert(0, f"User prefers to be called: {active_name}")
             conversation_snapshot = "\n".join(conversation_lines)
             user_prompt = (
                 f"Conversation snapshot:\n{conversation_snapshot}\n\n"
                 f"Support context:\n{composed_context}\n\n"
-                "Instruction: deliver a concise answer, in English, and cite the supporting sources by name."
+                f"Instruction: deliver a concise answer in {language_label}, cite the supporting sources by name, "
+                "and keep the tone helpful."
             )
             ai_response = self._provider.generate_response(
                 system_prompt=system_prompt,
@@ -169,6 +211,8 @@ class KnowledgeAgent(Agent):
             "web_search_used": web_search_used,
             "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
             "previous_message_remembered": remembered_previous,
+            "remembered_name": bool(active_name),
+            "response_language": language,
         }
 
         response = AgentResponse(
@@ -177,7 +221,7 @@ class KnowledgeAgent(Agent):
             citations=citations,
             meta=meta,
         )
-        self._record_user_message(history_key, query)
+        self._record_user_message(history_key, query, name=active_name)
         return response
 
     def _fallback_response(
@@ -188,21 +232,54 @@ class KnowledgeAgent(Agent):
         rag_used: bool,
         web_search_used: bool,
         remembered_previous: bool,
+        remembered_name: Optional[str],
+        language: str,
     ) -> AgentResponse:
-        if _is_simple_greeting(query):
-            content = "Olá novamente! Como posso ajudar você desta vez?" if remembered_previous else "Olá! Como posso ajudar você hoje?"
-        else:
-            if remembered_previous:
+        if language == "pt":
+            greeting = "Olá!"
+            if remembered_name:
+                greeting = f"Olá, {remembered_name}!"
+            if _is_simple_greeting(query):
                 content = (
-                    "Ainda não encontrei informações suficientes na base de conhecimento, "
-                    "mas estou acompanhando sua solicitação. Pode me contar um pouco mais "
-                    "sobre o que você precisa para que eu possa ajudar melhor?"
+                    f"{greeting} Como posso ajudar você desta vez?"
+                    if remembered_previous
+                    else f"{greeting} Como posso ajudar você hoje?"
                 )
             else:
+                prefix = f"{remembered_name}, " if remembered_name else ""
+                if remembered_previous:
+                    content = (
+                        f"{prefix}ainda não encontrei informações suficientes na base de conhecimento, "
+                        "mas continuo acompanhando sua solicitação. Pode me contar um pouco mais "
+                        "sobre o que você precisa para que eu possa ajudar melhor?"
+                    )
+                else:
+                    content = (
+                        f"{prefix}ainda não encontrei informações suficientes na base de conhecimento. "
+                        "Pode compartilhar mais detalhes? Estou aqui para ajudar!"
+                    )
+        else:
+            greeting = "Hello!"
+            if remembered_name:
+                greeting = f"Hello, {remembered_name}!"
+            if _is_simple_greeting(query):
                 content = (
-                    "Ainda não encontrei informações suficientes na base de conhecimento para responder com precisão. "
-                    "Pode compartilhar mais detalhes? Estou aqui para ajudar!"
+                    f"{greeting} How can I help you this time?"
+                    if remembered_previous
+                    else f"{greeting} How can I help you today?"
                 )
+            else:
+                prefix = f"{remembered_name}, " if remembered_name else ""
+                if remembered_previous:
+                    content = (
+                        f"{prefix}I still haven't found enough details in the knowledge base, but I'm "
+                        "following your request. Could you share a bit more so I can support you better?"
+                    )
+                else:
+                    content = (
+                        f"{prefix}I couldn't find enough information in the knowledge base yet. "
+                        "Could you share more details? I'm here to help!"
+                    )
         citations = build_citations([], fallback_urls=FALLBACK_URLS)
         meta = {
             "rag_used": rag_used,
@@ -213,14 +290,21 @@ class KnowledgeAgent(Agent):
             "web_search_used": web_search_used,
             "duration_ms": 0.0,
             "previous_message_remembered": remembered_previous,
+            "remembered_name": bool(remembered_name),
+            "response_language": language,
         }
         return AgentResponse(agent=self.name, content=content, citations=citations, meta=meta)
 
-    def _record_user_message(self, history_key: Optional[str], message: str) -> None:
+    def _record_user_message(self, history_key: Optional[str], message: str, *, name: Optional[str]) -> None:
         if not history_key:
             return
         try:
-            self._cache.set(history_key, {"last_message": message})
+            existing = self._cache.get(history_key)
+            payload = dict(existing) if isinstance(existing, dict) else {}
+            payload["last_message"] = message
+            if name:
+                payload["name"] = name
+            self._cache.set(history_key, payload)
         except Exception:
             logger.debug("rag.knowledge.history_store_failed", extra={"history_key": history_key})
 
@@ -267,6 +351,42 @@ _GREETING_PHRASES = {
 }
 
 
+_PORTUGUESE_WORDS = {
+    "oi",
+    "ola",
+    "olá",
+    "voce",
+    "você",
+    "meu",
+    "minha",
+    "problema",
+    "ajuda",
+    "ajudar",
+    "preciso",
+    "precisa",
+    "suporte",
+    "ainda",
+    "lembrar",
+    "lembra",
+    "nome",
+    "poderia",
+    "cpf",
+    "cnpj",
+}
+
+_ENGLISH_INDICATORS = {
+    "hello",
+    "hi",
+    "please",
+    "problem",
+    "help",
+    "remember",
+    "name",
+    "could",
+    "thank",
+}
+
+
 def _strip_accents(value: str) -> str:
     normalised = unicodedata.normalize("NFD", value)
     return "".join(char for char in normalised if unicodedata.category(char) != "Mn")
@@ -288,6 +408,118 @@ def _is_simple_greeting(text: str) -> bool:
         if joined in _GREETING_PHRASES:
             return True
     return False
+
+
+_NAME_PATTERNS = [
+    re.compile(r"\bmeu nome (?:é|e)\s+([^.,;!?\n\d]{2,})", re.IGNORECASE),
+    re.compile(r"\bme chamo\s+([^.,;!?\n\d]{2,})", re.IGNORECASE),
+    re.compile(r"\bchamo-me\s+([^.,;!?\n\d]{2,})", re.IGNORECASE),
+    re.compile(r"\bmy name is\s+([^.,;!?\n\d]{2,})", re.IGNORECASE),
+]
+
+_NAME_RECALL_PATTERNS = [
+    "lembra do meu nome",
+    "voce lembra do meu nome",
+    "voce lembra meu nome",
+    "sabe meu nome",
+    "qual e meu nome",
+    "qual é meu nome",
+    "remember my name",
+    "do you remember my name",
+    "what is my name again",
+]
+
+
+def _detect_language(text: str) -> str:
+    if not text:
+        return "en"
+    lowered = text.lower()
+    if any(char in "áéíóúãõâêôç" for char in lowered):
+        return "pt"
+    cleaned = _strip_accents(text).lower()
+    words = re.findall(r"[a-z]+", cleaned)
+    if any(word in _PORTUGUESE_WORDS for word in words):
+        return "pt"
+    if any(phrase in cleaned for phrase in ("meu nome", "por favor", "pode me ajudar", "voce")):
+        return "pt"
+    if any(word in _ENGLISH_INDICATORS for word in words):
+        return "en"
+    return "en"
+
+
+def _extract_name(text: str) -> Optional[str]:
+    if not text:
+        return None
+    for pattern in _NAME_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            normalised = _normalise_name(match.group(1))
+            if normalised:
+                return normalised
+    return None
+
+
+def _normalise_name(raw: str) -> Optional[str]:
+    if not raw:
+        return None
+    cleaned = raw.strip().strip("\"' ")
+    cleaned = re.split(r"[\n\r]", cleaned)[0]
+    cleaned = re.split(r"\b(?:mas|porque|por que|por quê|and|but|please|poderia)\b", cleaned, maxsplit=1)[0]
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return None
+    parts = [part for part in cleaned.split(" ") if part]
+    if not parts or len(parts) > 4:
+        return None
+    if parts[0].lower() in {"o", "a"} and len(parts) > 1:
+        parts = parts[1:]
+    if not parts:
+        return None
+    formatted_parts = []
+    for part in parts:
+        token = part.strip("-'")
+        if not token or not re.fullmatch(r"[A-Za-zÀ-ÖØ-öø-ÿ'-]+", part):
+            return None
+        formatted_parts.append(part[:1].upper() + part[1:].lower())
+    candidate = " ".join(formatted_parts)
+    if len(candidate) < 2:
+        return None
+    return candidate
+
+
+def _is_name_recall_question(text: str) -> bool:
+    if not text:
+        return False
+    cleaned = re.sub(r"[^a-z\s]", " ", _strip_accents(text).lower())
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return any(phrase in cleaned for phrase in _NAME_RECALL_PATTERNS)
+
+
+def _name_recall_response(name: Optional[str], language: str) -> AgentResponse:
+    if language == "pt":
+        if name:
+            content = f"Sim, você se chama {name}. Como posso ajudar você hoje?"
+        else:
+            content = "Ainda não registrei seu nome. Poderia me lembrar como devo chamá-lo?"
+    else:
+        if name:
+            content = f"Yes, your name is {name}. How can I assist you today?"
+        else:
+            content = "I haven't saved your name yet. Could you remind me how I should address you?"
+    citations = build_citations([], fallback_urls=FALLBACK_URLS)
+    meta = {
+        "rag_used": False,
+        "top_k_selected": 0,
+        "avg_score": 0.0,
+        "cache_hit": False,
+        "fallback_used": True,
+        "web_search_used": False,
+        "duration_ms": 0.0,
+        "previous_message_remembered": False,
+        "remembered_name": bool(name),
+        "response_language": language,
+    }
+    return AgentResponse(agent="knowledge", content=content, citations=citations, meta=meta)
 
 
 def _serialise_chunk(chunk: RetrievedChunk) -> dict:
