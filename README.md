@@ -5,13 +5,15 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 ## Author
 - Jefferson Rodrigo Schuertz (senior data engineer and project maintainer)
 
-> **Live demo:** http://168.231.99.83:8011/
 
-![Chat console showcasing knowledge and support agents](front-end-a.png "Chat experience with knowledge and support agents responding")
+> ## Live Demo
+> **Production URL:** [http://168.231.99.83:8011/](http://168.231.99.83:8011/) — the interface is live and mirrors the configuration described below.
 
-![Operational status panels for /health and /readiness](front-end-b.png "Status page displaying health and readiness endpoints")
+![Chat console showcasing knowledge and support agents](front-end-a.png "Chat screen where knowledge and support agents collaborate. Highlight: citations, ticket metadata, and correlation IDs at runtime.")
 
-![Metrics view streaming Prometheus exports](front-end-c.png "Real-time observability metrics exposed by the backend")
+![Operational status panels for /health and /readiness](front-end-b.png "Status dashboard confirming healthy /health and /readiness endpoints, including OpenAI key, embedding store, and resource checks.")
+
+![Metrics view streaming Prometheus exports](front-end-c.png "Metrics tab streaming Prometheus exposition in real time, listing agent counters, guardrail statistics, and latency histograms.")
 
 
 ## Unit Test Coverage
