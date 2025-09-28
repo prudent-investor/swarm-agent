@@ -12,27 +12,27 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 ## Repository Structure
 ```
 .
-??? agent-workflow/
-?   ??? app/
-?   ?   ??? agents/            # Router, knowledge, support, custom, Slack
-?   ?   ??? guardrails/        # Normalisation, moderation, safety filters
-?   ?   ??? observability/     # Logging, metrics, tracing, readiness
-?   ?   ??? services/          # LLM, RAG, support tools, Slack client, search
-?   ??? data/
-?   ?   ??? rag/               # RAG artefacts (raw, chunks, manifests)
-?   ??? scripts/               # RAG pipeline helpers and maintenance tasks
-?   ??? tests/                 # Pytest suites for agents, guardrails, APIs
-??? app/                       # Standalone scripts for offline RAG runs
-??? frontend/
-?   ??? public/                # Static assets served by Vite
-?   ??? src/                   # React components, pages, shared libs
-?   ??? tests/                 # Placeholder for Vitest/RTL suites
-??? data/                      # Generated artefacts when running from repo root
-??? scripts/                   # Convenience wrappers around backend scripts
-??? Dockerfile.backend         # Uvicorn + FastAPI image
-??? Dockerfile.frontend        # Nginx + static frontend image
-??? docker-compose.yml         # Local topology for backend/frontend containers
-??? requirements.txt           # Backend dependency lock file
+|-- agent-workflow/
+|   |-- app/
+|   |   |-- agents/                 # Router, knowledge, support, custom, Slack
+|   |   |-- guardrails/             # Normalisation, moderation, safety filters
+|   |   |-- observability/          # Logging, metrics, tracing, readiness
+|   |   `-- services/               # LLM, RAG, support tools, Slack client, search
+|   |-- data/
+|   |   `-- rag/                    # RAG artefacts (raw pages, chunks, manifests)
+|   |-- scripts/                    # RAG pipeline helpers and maintenance tasks
+|   `-- tests/                      # Pytest suites for agents, guardrails, APIs
+|-- app/                            # Standalone scripts for offline RAG runs
+|-- frontend/
+|   |-- public/                     # Static assets served by Vite
+|   |-- src/                        # React components, pages, shared libs
+|   `-- tests/                      # Placeholder for Vitest/RTL suites
+|-- data/                           # Generated artefacts when running from repo root
+|-- scripts/                        # Convenience wrappers around backend scripts
+|-- Dockerfile.backend              # Uvicorn + FastAPI image
+|-- Dockerfile.frontend             # Nginx + static frontend image
+|-- docker-compose.yml              # Local topology for backend/frontend containers
+`-- requirements.txt                # Backend dependency lock file
 ```
 
 > **Need the deep dive?** Backend internals, module layout, and the full environment variable reference formerly documented in `agent-workflow/README.md` are consolidated below under [Backend Internals & Environment Guide](#backend-internals--environment-guide).
@@ -60,7 +60,7 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 - Prometheus metrics per agent, including latency histograms, guardrail counters, redirect totals.
 - `/health` and `/readiness` monitor uptime, CPU/memory thresholds, and dependency state.
 
-## Backend ? Frontend Interaction
+## Backend-Frontend Interaction
 - Frontend consumes the API via `VITE_API_BASE_URL` (set in `frontend/.env` or passed at build time).
 - Backend whitelists UI origins with `FRONTEND_ALLOWED_ORIGINS` (comma-separated domains or IP:ports).
 - On VPS/VM deployments (Hostinger or similar) export matching variables during container creation:
@@ -79,18 +79,18 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 - **Knowledge evolution** manages manifests, TTL caches, and reranking heuristics for incremental updates.
 
 ## RAG Ingestion Pipeline
-1. **Load** ? Crawl URLs from `data/rag/sources/seed_urls.txt` with depth, timeout, pacing controls.
-2. **Clean** ? Strip chrome, deduplicate paragraphs, hash content for idempotency.
-3. **Split** ? Chunk documents with overlaps; capture metadata (title, order, canonical URL).
-4. **Embed** ? Generate embeddings via `text-embedding-3-small`; persist with chunk metadata.
-5. **Index** ? Emit manifest JSONL files, caches, hashed registries under `data/rag/index/`.
+1. **Load** - Crawl URLs from `data/rag/sources/seed_urls.txt` with depth, timeout, pacing controls.
+2. **Clean** - Strip chrome, deduplicate paragraphs, hash content for idempotency.
+3. **Split** - Chunk documents with overlaps; capture metadata (title, order, canonical URL).
+4. **Embed** - Generate embeddings via `text-embedding-3-small`; persist with chunk metadata.
+5. **Index** - Emit manifest JSONL files, caches, hashed registries under `data/rag/index/`.
 
 `python scripts/run_rag_dry_run.py` executes offline through the split stage; `python scripts/run_rag_pipeline.py` runs the full ingestion (requires network + OpenAI credentials). KnowledgeAgent v2 uses reranking heuristics (`title_boost`, `exact_term_boost`, `length_penalty`), query caching, fallbacks, and optional web search for low-recall queries.
 
 ## Frontend Experience
-- **Chat Console** ? Agent-tagged conversation view with citations, clipboard helpers, `correlation_id` display (`frontend/src/components/Chat.tsx`).
-- **Status Page** ? Displays `/health` and `/readiness` payloads (`frontend/src/pages/Status.tsx`).
-- **Metrics Page** ? Streams Prometheus exposition with refresh/export controls (`frontend/src/pages/Metrics.tsx`).
+- **Chat Console** - Agent-tagged conversation view with citations, clipboard helpers, `correlation_id` display (`frontend/src/components/Chat.tsx`).
+- **Status Page** - Displays `/health` and `/readiness` payloads (`frontend/src/pages/Status.tsx`).
+- **Metrics Page** - Streams Prometheus exposition with refresh/export controls (`frontend/src/pages/Metrics.tsx`).
 
 ## Deployment Playbooks
 
@@ -185,7 +185,7 @@ npx serve dist --listen 0.0.0.0:4173
 - Individual images: `docker build -f Dockerfile.backend -t agent-backend .` and `docker build -f Dockerfile.frontend -t agent-frontend .`
 
 ## Environment Configuration
-Copy `.env.example` ? `agent-workflow/.env` and adjust:
+Copy `.env.example` to  `agent-workflow/.env` and adjust:
 - **OpenAI**: `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL`
 - **Retrieval**: `RAG_ENABLED`, `RAG_TOP_K`, `RAG_MIN_SCORE`, `RAG_MAX_CONTEXT_CHARS`, `RAG_DIAGNOSTICS_ENABLED`
 - **Web Search**: `WEB_SEARCH_ENABLED`, `WEB_SEARCH_PROVIDER`, `WEB_SEARCH_API_KEY`
@@ -202,10 +202,10 @@ Missing OpenAI credentials trigger RouterAgent heuristics while KnowledgeAgent c
 - Import `collections/agent-workflow.postman_collection.json` into Postman/Insomnia for manual verification.
 
 ## Support Tooling Detail
-1. **FAQTool** ? cosine-matched answers sourced from `data/support/faq.json` (boleto/device flows included).
-2. **TicketTool** ? in-memory or file-backed ticket creation with masked snapshots (`GET /support/tickets/{id}`).
-3. **UserProfileTool** ? extracts user metadata, masks PII, reuses profiles between requests.
-4. **AccountStatusTool** ? explains blocked transfers or limits using `data/support/account_status.json` before escalation.
+1. **FAQTool** - cosine-matched answers sourced from `data/support/faq.json` (boleto/device flows included).
+2. **TicketTool** - in-memory or file-backed ticket creation with masked snapshots (`GET /support/tickets/{id}`).
+3. **UserProfileTool** - extracts user metadata, masks PII, reuses profiles between requests.
+4. **AccountStatusTool** - explains blocked transfers or limits using `data/support/account_status.json` before escalation.
 
 ## RAG Source Catalogue
 `data/rag/sources/seed_urls.txt` includes `/maquininha`, `/maquininha-celular`, `/tap-to-pay`, `/pdv`, `/receba-na-hora`, `/gestao-de-cobranca`, `/gestao-de-cobranca-2`, `/link-de-pagamento`, `/loja-online`, `/boleto`, `/conta-digital`, `/conta-pj`, `/pix`, `/pix-parcelado`, `/emprestimo`, `/cartao`, `/rendimento`. KnowledgeAgent v2 always cites these (or trusted external results when web search is enabled).
@@ -248,6 +248,75 @@ pytest
 - Add automated frontend tests (Vitest/RTL) and visual regression coverage.
 - Document horizontal scaling patterns (Redis cache for RAG, OpenTelemetry tracing).
 - Extend RAG whitelist with future marketing content while preserving guardrailed ingestion.
+
+## Docker Build & Run Examples
+The commands below mirror the sample you shared and include the environment variables you typically need in this project. Feel free to adapt the placeholder values for your deployment.
+
+### 1. Create a dedicated Docker network
+```bash
+docker network create agentnet
+```
+
+### 2. Build the backend image (FastAPI + Uvicorn)
+```bash
+docker build \
+  -t swarm-agent-backend \
+  -f Dockerfile.backend \
+  .
+```
+
+### 3. Build the frontend image (Vite build served by Nginx)
+If you need to bake the API URL during build, pass it as an argument:
+```bash
+docker build \
+  --build-arg VITE_API_BASE_URL="http://swarm-backend:8000" \
+  -t swarm-agent-frontend \
+  -f Dockerfile.frontend \
+  .
+```
+
+### 4. Run the backend container with all required environment variables
+```bash
+docker run -d \
+  --name swarm-backend \
+  --network agentnet \
+  -e OPENAI_API_KEY="sk-your-openai-key" \
+  -e OPENAI_MODEL="gpt-4.1-mini" \
+  -e OPENAI_EMBEDDING_MODEL="text-embedding-3-small" \
+  -e FRONTEND_ALLOWED_ORIGINS="https://app.example.com,http://localhost:5173" \
+  -e RAG_ENABLED="true" \
+  -e WEB_SEARCH_ENABLED="false" \
+  -e SLACK_ENABLED="false" \
+  -e METRICS_ENABLED="true" \
+  -e READINESS_ENABLED="true" \
+  -p 8000:8000 \
+  swarm-agent-backend
+```
+- `OPENAI_API_KEY` - replace with your production key.
+- `FRONTEND_ALLOWED_ORIGINS` - list every domain/IP that should access the API.
+- Toggle other flags (`RAG_ENABLED`, `SLACK_ENABLED`, `WEB_SEARCH_ENABLED`) to suit your deployment.
+
+### 5. Run the frontend container pointing to the backend service
+```bash
+docker run -d \
+  --name swarm-frontend \
+  --network agentnet \
+  -e VITE_API_BASE_URL="http://swarm-backend:8000" \
+  -p 8080:80 \
+  swarm-agent-frontend
+```
+- `VITE_API_BASE_URL` can use the backend container name (`swarm-backend:8000`) when both services share `agentnet`.
+- Adjust the published port (`8080:80`) if a different host port is required.
+
+With both containers running you can reach:
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:8080`
+
+Stop the stack when finished:
+```bash
+docker stop swarm-frontend swarm-backend && docker rm swarm-frontend swarm-backend
+```
+
 
 ## Backend Internals & Environment Guide
 - **Directory layout** mirrors the structure above with emphasis on FastAPI routers (`app/routers`), schemas (`app/schemas`), and utility modules (`app/utils`).
