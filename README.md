@@ -5,6 +5,15 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 ## Author
 - Jefferson Rodrigo Schuertz (senior data engineer and project maintainer)
 
+> **Live demo:** http://168.231.99.83:8011/
+
+![Chat console showcasing knowledge and support agents](front-end-a.png "Chat experience with knowledge and support agents responding")
+
+![Operational status panels for /health and /readiness](front-end-b.png "Status page displaying health and readiness endpoints")
+
+![Metrics view streaming Prometheus exports](front-end-c.png "Real-time observability metrics exposed by the backend")
+
+
 ## Unit Test Coverage
 - Command: `python -m pytest --cov=app --cov-report=term`
 - Result: **86% line coverage (28 Sep 2025 01:40 UTC)**
