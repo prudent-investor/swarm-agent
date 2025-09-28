@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -36,6 +36,7 @@ class TicketCreateRequest:
     priority: str
     channel: str = "chat"
     escalation: bool = False
+    profile_snapshot: Optional[Dict[str, Optional[str]]] = None
 
 
 @dataclass
@@ -52,6 +53,7 @@ class Ticket:
     updated_at: datetime
     escalation: bool = False
     internal_notes: Optional[str] = None
+    profile_snapshot: Optional[Dict[str, Optional[str]]] = None
 
 
 @dataclass

@@ -1,5 +1,6 @@
 ﻿from typing import Optional
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -67,13 +68,28 @@ class Settings(BaseSettings):
 
     guardrails_enabled: bool = True
     guardrails_mode: str = "balanced"
-    guardrails_max_input_chars: int = 4000
-    guardrails_max_output_chars: int = 3000
-    guardrails_normalize_remove_accents: bool = True
+    guardrails_max_input_chars: int = Field(
+        default=4000,
+        validation_alias=AliasChoices("GUARDRAILS_MAX_INPUT_CHARS", "MAX_INPUT_CHARS"),
+    )
+    guardrails_max_output_chars: int = Field(
+        default=3000,
+        validation_alias=AliasChoices("GUARDRAILS_MAX_OUTPUT_CHARS", "MAX_OUTPUT_CHARS"),
+    )
+    guardrails_normalize_remove_accents: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("GUARDRAILS_NORMALIZE_REMOVE_ACCENTS", "NORMALIZE_REMOVE_ACCENTS"),
+    )
     guardrails_normalize_strip_symbols: str = "~,^,\u00b4,\u00b8,`,\\"
-    guardrails_anti_injection_enabled: bool = True
+    guardrails_anti_injection_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("GUARDRAILS_ANTI_INJECTION_ENABLED", "ANTI_INJECTION_ENABLED"),
+    )
     guardrails_anti_injection_patterns: Optional[str] = None
-    guardrails_moderation_enabled: bool = True
+    guardrails_moderation_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("GUARDRAILS_MODERATION_ENABLED", "MODERATION_ENABLED"),
+    )
     guardrails_moderation_blocklist_terms: Optional[str] = None
     guardrails_diagnostics_enabled: bool = False
 

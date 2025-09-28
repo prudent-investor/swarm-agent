@@ -59,7 +59,7 @@ A production-ready multi-agent platform that orchestrates router, knowledge, sup
 | --- | --- | --- |
 | RouterAgent | Intent detection, OpenAI-backed classification with deterministic JSON output, language normalisation, and manual fallbacks. | `agent-workflow/app/agents/router_agent.py` |
 | KnowledgeAgent v2 | Retrieval augmented answers grounded on InfinitePay documentation, caching, heuristics-based re-ranking, and optional web search fallback. | `agent-workflow/app/agents/knowledge_agent_v2.py` |
-| CustomerSupportAgent v2 | FAQ matcher, ticket generator, policy evaluation (`decide`), and escalation gating with human confirmation. | `agent-workflow/app/agents/support_agent_v2.py`, `agent-workflow/app/services/support_service.py` |
+| CustomerSupportAgent v2 | FAQ matcher, ticket generator, policy evaluation (`decide`), user profile retention, account-status explanations, and escalation gating with human confirmation. | `agent-workflow/app/agents/support_agent_v2.py`, `agent-workflow/app/services/support_service.py` |
 | CustomAgent | Lightweight templated replies for small talk or unsupported topics. | `agent-workflow/app/agents/custom_agent.py` |
 | SlackAgent | Human hand-off workflow with confirmation tokens, Slack payload formatting, and retry-aware metrics. | `agent-workflow/app/agents/slack_agent.py` |
 
@@ -188,6 +188,59 @@ This command builds both images, starts the backend on `http://localhost:8000`, 
 docker build -f Dockerfile.backend -t agent-backend .
 docker build -f Dockerfile.frontend -t agent-frontend .
 ```
+
+## Environment Configuration
+
+Copy `.env.example` into `agent-workflow/.env` and tweak the grouped settings as needed:
+
+* **OpenAI** – `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_EMBEDDING_MODEL` feed both routing and RAG workloads.
+* **Retrieval** – `RAG_ENABLED`, `RAG_TOP_K`, `RAG_MIN_SCORE`, `RAG_MAX_CONTEXT_CHARS`, and `RAG_DIAGNOSTICS_ENABLED` adjust query behaviour and expose debugging endpoints.
+* **Web search** – `WEB_SEARCH_ENABLED`, `WEB_SEARCH_PROVIDER`, and `WEB_SEARCH_API_KEY` toggle external lookups for out-of-domain questions.
+* **Support tooling** – `SUPPORT_FAQ_ENABLED`, `SUPPORT_FAQ_SCORE_THRESHOLD`, `SUPPORT_TICKETS_PERSIST_TO_FILE`, `SUPPORT_ESCALATION_AUTO`, and `SUPPORT_PII_MASKING_ENABLED` govern FAQ lookups, ticket persistence, and masking.
+* **Guardrails** – `GUARDRAILS_ENABLED`, `GUARDRAILS_MODE`, `MAX_INPUT_CHARS`, `MAX_OUTPUT_CHARS`, `NORMALIZE_REMOVE_ACCENTS`, `ANTI_INJECTION_ENABLED`, and `MODERATION_ENABLED` enforce safety policies globally.
+* **Slack / handoff** – `SLACK_ENABLED`, `SLACK_MODE`, `SLACK_WEBHOOK_URL` or `SLACK_BOT_TOKEN`, `SLACK_DEFAULT_CHANNEL`, and `HANDOFF_CONFIRM_TTL_SECONDS` control the fourth agent that escalates to humans.
+* **Observability** – `METRICS_ENABLED`, `LOG_FORMAT`, `CORRELATION_ID_HEADER`, `READINESS_ENABLED`, `READINESS_CPU_THRESHOLD`, and `READINESS_MEMORY_THRESHOLD_MB` wire telemetry and readiness probes.
+* **Frontend** – `FRONTEND_ALLOWED_ORIGINS` aligns CORS with the Vercel deployment, while `frontend/.env.example` exposes `VITE_API_BASE_URL` for the SPA.
+
+All keys ship with conservative defaults so the application boots locally without secrets.
+
+## Smoke Tests & Collections
+
+* Run the automated end-to-end checks with `./smoke-tests.sh` (set `BASE_URL` when targeting remote deployments). The script validates health, routing, each agent—including Slack confirmation—guardrail blocking, ticket retrieval, metrics, and readiness.
+* Import `collections/agent-workflow.postman_collection.json` into Postman/Insomnia for interactive exploration. The collection mirrors the smoke script and exposes placeholders for ticket identifiers and the backend base URL.
+
+## Support Tooling Deep Dive
+
+`SupportService` orchestrates four tools to satisfy the challenge requirements:
+
+1. **FAQTool** – cosine-matched responses sourced from `data/support/faq.json` (now including boleto flows).
+2. **TicketTool** – in-memory or file-backed ticket creation with masked snapshots for GET `/support/tickets/{id}`.
+3. **UserProfileTool** – extracts and persists user email/plan hints, masks PII, and reuses the data on subsequent interactions.
+4. **AccountStatusTool** – explains operational blocks (e.g., transferências bloqueadas) using `data/support/account_status.json` before escalating to a human.
+
+Metadata returned by the agent lists `tools_used`, the masked profile snapshot, and escalation hints so downstream services can react deterministically.
+
+## RAG Source Catalogue
+
+The ingestion whitelist lives at `data/rag/sources/seed_urls.txt` and covers every InfinitePay page mandated by the challenge: `/maquininha`, `/maquininha-celular`, `/tap-to-pay`, `/pdv`, `/receba-na-hora`, `/gestao-de-cobranca`, `/gestao-de-cobranca-2`, `/link-de-pagamento`, `/loja-online`, `/boleto`, `/conta-digital`, `/conta-pj`, `/pix`, `/pix-parcelado`, `/emprestimo`, `/cartao`, and `/rendimento`.
+
+KnowledgeAgent v2 always emits citations pointing to these URLs (or web search results when explicitly enabled).
+
+## Slack / Handoff Flow
+
+The fourth agent registers pending escalations, requests user confirmation, and pushes formatted payloads to Slack (mock or real mode). Metadata returned from `/chat` includes the ticket/category/priority, `handoff_token`, delivery status (`ok`/`failed`/`disabled`), and latency to ensure compliance teams can audit every hand-off.
+
+## Guardrails & Observability
+
+* Accent stripping, prompt-injection cleansing, PII masking, output truncation, and moderation counters are enforced before and after each agent runs. Violations short-circuit the pipeline with an explicit `guardrails` response.
+* `/metrics` exposes per-agent request counters, redirect totals, guardrail counters, and latency histograms ready for Prometheus scraping. `/readiness` validates CPU/memory thresholds and OpenAI credentials, while `/health` surfaces uptime metadata. Structured JSON logs propagate `correlation_id` across agents and the Slack client.
+
+## Deployment Readiness
+
+* **Render (backend)** – `Dockerfile.backend` bundles the FastAPI app with Uvicorn on port 8000, honours `FRONTEND_ALLOWED_ORIGINS`, and relies solely on environment variables for secrets. Health (`/health`) and readiness (`/readiness`) endpoints align with Render probes.
+* **Vercel (frontend)** – `Dockerfile.frontend` ships the Vite build behind Nginx. Alternatively, deploy with the Vercel “Other” preset using `npm run build`; configure `VITE_API_BASE_URL` to point at the Render service.
+
+The smoke script and Postman collection double as post-deploy validation steps for both platforms.
 
 ## Testing Strategy
 

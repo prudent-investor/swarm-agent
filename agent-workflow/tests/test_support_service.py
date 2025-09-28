@@ -113,6 +113,9 @@ def test_handle_support_returns_faq_result(monkeypatch):
     assert response["ticket"] is None
     assert response["policy"] is None
     assert response["latency_ms"] > 0
+    assert response["account_status"] is None
+    assert set(response["tools_used"]).issuperset({"user_profile", "faq"})
+    assert response["profile_masked"]["user_id"].startswith("cl")
     assert service.metrics.total_requests == 1
     assert service.metrics.faq_hits == 1
     assert service.metrics.latencies_ms
@@ -135,11 +138,14 @@ def test_handle_support_creates_ticket_and_records_metrics(monkeypatch, sample_t
     assert service.metrics.tickets_created == 1
     assert service.metrics.escalations == 1
     assert response["latency_ms"] > 0
+    assert response["account_status"] is None
+    assert set(response["tools_used"]).issuperset({"user_profile", "support_policy", "ticket"})
 
     assert ticket_tool.created_requests, "Ticket create should have been called"
     request = ticket_tool.created_requests[0]
     assert request.summary == "Pagamento travado no caixa"
     assert "Preciso falar com humano" in request.description
+    assert request.profile_snapshot["user_id"].startswith("cl")
 
 
 def test_get_ticket_public_masks_user_reference(monkeypatch, sample_ticket):
