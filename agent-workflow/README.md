@@ -56,18 +56,27 @@ pytest
 
 Tests stub the OpenAI client and external network access, so they run fully offline.
 
+After starting the API (or pointing `BASE_URL` to a deployed host) you can execute the end-to-end smoke suite from the repository root:
+
+```bash
+./smoke-tests.sh
+```
+
 ## Key Environment Variables
 
 | Variable | Purpose |
 | --- | --- |
 | `APP_NAME`, `APP_VERSION`, `APP_PORT` | Metadata reported by the API |
-| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL` | Models used by router and RAG agents |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL` | Models used by router, router heuristics, and RAG embeddings |
 | `RAG_*` | Crawl, chunk, cache, and scoring configuration for the pipeline |
-| `RAG_ADMIN_ENABLED` | Enables `/rag/reindex` for administrative triggers |
-| `GUARDRAILS_*`, `PII_*` | Prompt-injection detection, moderation, and masking flags |
-| `METRICS_ENABLED` | Toggles Prometheus metrics (`/metrics`) |
+| `WEB_SEARCH_*` | Enable, select provider, and authenticate outbound search |
+| `SUPPORT_*` | Tune FAQ thresholds, ticket persistence, escalation, and masking behaviour |
+| `GUARDRAILS_*`, `PII_*` | Prompt-injection detection, moderation, normalisation, and PII masking flags |
+| `SLACK_*`, `SLACK_AGENT_ENABLED`, `HANDOFF_CONFIRM_TTL_SECONDS` | Slack client credentials, modes (mock/real), and user confirmation TTL |
+| `REDIRECT_*` | Manual/low-confidence redirect thresholds before calling agents |
+| `METRICS_ENABLED`, `LOG_FORMAT`, `CORRELATION_ID_HEADER` | Prometheus exposure and structured logging controls |
 | `READINESS_*` | CPU and memory guard thresholds for readiness checks |
-| `REDIRECT_*`, `SLACK_AGENT_ENABLED` | Human hand-off configuration |
+| `FRONTEND_ALLOWED_ORIGINS` | Permitted origins for the frontend application |
 
 Refer to `settings.py` for the complete catalogue and defaults.
 

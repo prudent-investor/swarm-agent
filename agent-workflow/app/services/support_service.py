@@ -58,6 +58,8 @@ def _mask_pii(value: Optional[str]) -> Optional[str]:
     masked = re.sub(r"([\w._%+-]+)@([\w.-]+)", r"***@\2", value)
     masked = re.sub(r"\b(\d{2})\d{3}(\d{2,})\b", r"\1***\2", masked)
     masked = re.sub(r"\b\d{5,}\b", "***", masked)
+    if masked == value:
+        return "***"
     return masked
 
 

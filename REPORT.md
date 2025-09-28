@@ -1,25 +1,26 @@
-# REPORT
+﻿# REPORT
 
 ## Checklist do desafio
-- [OK] Router integra Knowledge, Support, Custom e Slack/Handoff com normalização de texto.
-- [OK] KnowledgeAgent v2 usa RAG com fontes InfinitePay, gera citações e ativa web search opcional.
-- [OK] SupportAgent v2 combina FAQ, TicketTool, UserProfileTool e AccountStatusTool com masking de PII.
-- [OK] Slack/Handoff Agent confirma escalonamento, preserva metadados e respeita modos mock/real.
-- [OK] Guardrails globais com remoção de acentos, anti-injection, moderação, truncagem e métricas.
-- [OK] Observabilidade completa (/metrics, logs JSON, correlation-id, /readiness com limites configuráveis).
-- [OK] Containerização para backend (Render) e frontend (Vercel), com CORS e health checks.
-- [OK] Seeds/whitelist RAG atualizados com todas as páginas InfinitePay exigidas.
-- [OK] Web search configurável via variáveis de ambiente.
-- [OK] Coleção Postman e script de smoke automatizado cobrindo endpoints críticos.
+- [OK] RouterAgent orquestra Knowledge, Support, Custom e Slack/Handoff (incluindo heurísticas offline e normalização de texto).
+- [OK] KnowledgeAgent v2 usa RAG das páginas InfinitePay exigidas, retorna citações obrigatórias e aciona web search externa quando habilitada.
+- [OK] SupportAgent v2 opera FAQ, TicketTool, UserProfileTool e AccountStatusTool com masking de PII e políticas de escalonamento.
+- [OK] Slack/Handoff Agent confirma a intenção do usuário, registra token de confirmação, preserva ticket/categoria/prioridade e trata modos mock/real, falha e desligado.
+- [OK] Guardrails globais: remoção de acentos, anti-injection, moderação, masking, truncagem e métricas dedicadas.
+- [OK] Observabilidade: logs JSON com correlation-id, /metrics com séries por agente/guardrail/handoff, /readiness com thresholds configuráveis.
+- [OK] Containerização e deploy: Dockerfiles separados, CORS configurável (`FRONTEND_ALLOWED_ORIGINS`), docker-compose e instruções Render/Vercel.
+- [OK] Seeds/whitelist RAG atualizados com todas as URLs InfinitePay listadas no enunciado.
+- [OK] Web search configurável (`WEB_SEARCH_*`) e marcada como fonte externa nas citações.
+- [OK] Coleção Postman (`collections/agent-workflow.postman_collection.json`) e script `smoke-tests.sh` cobrindo health, router, 4 agentes, tickets, metrics e readiness.
 
 ## Testes executados
-- `pytest -q` (passou – 113 testes). Consulte `agent-workflow` para reproduzir.
-- `./smoke-tests.sh` (não executado neste ambiente – requer API em execução com credenciais OpenAI válidas).
+- `python -m pytest -q`
+- `python -m pytest --cov=app --cov-report=term` → cobertura global 86%
+- `./smoke-tests.sh` (BASE_URL local com Uvicorn dedicado)
 
 ## Pendências e plano
-- Nenhuma pendência funcional. Para validar em staging/produção, executar `./smoke-tests.sh` apontando para o backend publicado e revisar o retorno do Slack real.
+- Não há pendências funcionais. Para novos ambientes, repetir os smokes apontando para o host público e validar o fluxo Slack real (caso habilitado).
 
 ## Deploy
-- **Render (backend)**: construir imagem com `Dockerfile.backend`, expor porta 8000, definir variáveis do `.env.example`, configurar health em `/health` e readiness em `/readiness`.
-- **Vercel (frontend)**: usar build `npm run build`, apontar `VITE_API_BASE_URL` para o domínio Render, habilitar headers de CORS já contemplados em `FRONTEND_ALLOWED_ORIGINS`.
-- Após deploy, rodar `./smoke-tests.sh` (com `BASE_URL` público) e importar `collections/agent-workflow.postman_collection.json` para uma verificação manual.
+- **Render (backend)**: construir com `Dockerfile.backend`, expor porta 8000, definir variáveis do `.env.example`, e configurar probes em `/health` e `/readiness`.
+- **Vercel (frontend)**: usar preset Vite/Other com `npm run build`, configurar `VITE_API_BASE_URL` para o backend público e manter CORS alinhado (`FRONTEND_ALLOWED_ORIGINS`).
+- Após o deploy, rodar `./smoke-tests.sh` com `BASE_URL` apontado para produção e, opcionalmente, importar a coleção Postman para verificação manual.

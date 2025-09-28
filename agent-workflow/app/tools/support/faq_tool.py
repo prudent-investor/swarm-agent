@@ -22,7 +22,7 @@ class FAQTool:
 
     def _load_dataset(self) -> None:
         try:
-            raw = self._dataset_path.read_text(encoding="utf-8")
+            raw = self._dataset_path.read_text(encoding="utf-8-sig")
         except FileNotFoundError:
             logger.warning(
                 "support.faq.dataset_missing",
@@ -141,4 +141,3 @@ def _build_explanation(item: FAQItem, tokens: List[str], score: float) -> str:
     pergunta = _normalise(item.pergunta)
     matched_tokens = [token for token in tokens if token in pergunta or token in item.tags]
     return f"tokens={','.join(matched_tokens)} score={score:.2f}"
-

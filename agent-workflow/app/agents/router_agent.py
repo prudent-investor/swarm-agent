@@ -66,7 +66,7 @@ class RouterAgent:
         if not text:
             return RoutingDecision(route=Route.custom, hint="fallback_empty", confidence=None)
 
-        support_keywords = {"pagamento", "pagamentos", "fraude", "cobranca", "chargeback", "suporte"}
+        support_keywords = {"pagamento", "pagamentos", "fraude", "cobranca", "chargeback", "suporte", "boleto", "maquininha"}
         if any(keyword in text for keyword in support_keywords):
             return RoutingDecision(route=Route.support, hint="fallback_support", confidence=0.4)
 
@@ -95,8 +95,12 @@ class RouterAgent:
         if self._match_direct_handoff(message):
             return RoutingDecision(route=Route.slack, hint="user_requested_human", confidence=1.0)
 
+        fallback_decision = self._fallback_route(message)
+        if fallback_decision.route != Route.custom:
+            return fallback_decision
+
         if not self.api_key:
-            return self._fallback_route(message)
+            return fallback_decision
 
         client = self._get_client()
 
@@ -168,5 +172,7 @@ class RouterAgent:
         return RoutingDecision(route=route, hint=hint_value, confidence=confidence_value)
 
 router_agent = RouterAgent()
+
+
 
 
