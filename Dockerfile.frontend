@@ -1,9 +1,6 @@
-FROM node:20-alpine AS build
+FROM node:20-bookworm-slim AS build
 
 WORKDIR /usr/src/app
-
-# Install glibc compatibility so @swc/core binaries run correctly on Alpine
-RUN apk add --no-cache libc6-compat
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --legacy-peer-deps

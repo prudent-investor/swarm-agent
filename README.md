@@ -266,7 +266,7 @@ docker build \
 ```
 
 ### 3. Build the frontend image (Vite build served by Nginx)
-The Dockerfile installs `libc6-compat` so `@swc/core` binaries run on Alpine. If you need to bake the API URL during build, pass it as an argument:
+The build stage now uses `node:20-bookworm-slim`, so `@swc/core` installs cleanly. If you need to bake the API URL during build, pass it as an argument:
 ```bash
 docker build \
   --build-arg VITE_API_BASE_URL="http://swarm-backend:8000" \
