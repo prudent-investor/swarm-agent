@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.settings import settings
+from app.utils.paths import get_support_data_dir
 
 from .contracts import FAQItem, FAQQuery, FAQResult
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class FAQTool:
     def __init__(self, *, dataset_path: Optional[Path] = None) -> None:
-        self._dataset_path = dataset_path or Path("data") / "support" / "faq.json"
+        self._dataset_path = dataset_path or get_support_data_dir() / "faq.json"
         self._items: List[FAQItem] = []
         self._load_dataset()
 

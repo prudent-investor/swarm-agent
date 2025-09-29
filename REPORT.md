@@ -16,6 +16,7 @@
 - `python -m pytest -q`
 - `python -m pytest --cov=app --cov-report=term` → cobertura global 86%
 - `./smoke-tests.sh` (BASE_URL local com Uvicorn dedicado)
+- `pytest tests/test_infinitepay_chat_regression.py -q`
 
 ## Pendências e plano
 - Não há pendências funcionais. Para novos ambientes, repetir os smokes apontando para o host público e validar o fluxo Slack real (caso habilitado).

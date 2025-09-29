@@ -4,11 +4,13 @@ import json
 import logging
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
 
 from app.settings import settings
+from app.utils.paths import get_rag_index_dir
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class RetrievedChunk:
 
 class RAGRetriever:
     def __init__(self, *, index_dir: Path | None = None) -> None:
-        self.index_dir = index_dir or (Path("data") / "rag" / "index")
+        self.index_dir = index_dir or get_rag_index_dir()
         self._index_cache: List[dict] | None = None
 
     def retrieve(self, query: str, *, top_k: int | None = None) -> List[RetrievedChunk]:
@@ -42,13 +44,15 @@ class RAGRetriever:
         if not tokens:
             return []
 
+        token_pairs = [(token, _strip_accents(token)) for token in tokens]
+
         scored: List[RetrievedChunk] = []
         for entry in index_entries:
             text = entry.get("text", "")
             title = entry.get("title")
             url = _canonical_url(entry.get("url", ""))
-            base_score = _score_text(tokens, text)
-            title_score = _score_title(tokens, title)
+            base_score = _score_text(token_pairs, text)
+            title_score = _score_title(token_pairs, title)
             total_score = base_score + title_score
             if total_score <= 0:
                 continue
@@ -114,28 +118,55 @@ def _normalise_query(query: str) -> str:
     return query
 
 
-def _score_text(tokens: Iterable[str], text: str) -> float:
+def _score_text(tokens: Iterable[tuple[str, str]], text: str) -> float:
     lowered = text.lower()
+    accentless = _strip_accents(lowered)
     score = 0.0
-    for token in tokens:
-        occurrences = lowered.count(token)
+    for original, normalised in tokens:
+        normalized_token = normalised or original
+        occurrences = 0
+        if original:
+            occurrences = lowered.count(original)
+        if not occurrences and normalized_token:
+            occurrences = lowered.count(normalized_token)
+        if not occurrences and normalized_token:
+            occurrences = accentless.count(normalized_token)
+        if not occurrences and original:
+            accentless_original = _strip_accents(original)
+            if accentless_original:
+                occurrences = accentless.count(accentless_original)
         if occurrences:
             score += occurrences
     if not score:
         return 0.0
-    length_penalty = 1.0 / math.log(len(lowered) + 10, 10)
+    length_penalty = 1.0 / math.log(len(accentless) + 10, 10)
     return score * length_penalty
 
 
-def _score_title(tokens: Iterable[str], title: str | None) -> float:
+def _score_title(tokens: Iterable[tuple[str, str]], title: str | None) -> float:
     if not title:
         return 0.0
     lowered = title.lower()
+    accentless = _strip_accents(lowered)
     score = 0.0
-    for token in tokens:
-        if token in lowered:
+    for original, normalised in tokens:
+        normalized_token = normalised or original
+        if original and original in lowered:
+            score += settings.rag_rerank_title_boost
+            continue
+        if normalized_token and normalized_token in lowered:
+            score += settings.rag_rerank_title_boost
+            continue
+        if normalized_token and normalized_token in accentless:
             score += settings.rag_rerank_title_boost
     return score
+
+
+def _strip_accents(value: str) -> str:
+    if not value:
+        return ""
+    normalised = unicodedata.normalize("NFD", value)
+    return "".join(char for char in normalised if unicodedata.category(char) != "Mn")
 
 
 def _canonical_url(url: str) -> str:

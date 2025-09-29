@@ -7,6 +7,7 @@ from typing import Dict, Iterable, List, Optional
 
 from app.settings import settings
 from app.utils.text import strip_portuguese_accents
+from app.utils.paths import get_support_data_dir
 
 
 @dataclass
@@ -51,7 +52,7 @@ class AccountStatusResult:
 
 class AccountStatusTool:
     def __init__(self, *, dataset_path: Optional[Path] = None) -> None:
-        default_path = Path("data/support/account_status.json")
+        default_path = get_support_data_dir() / "account_status.json"
         self._dataset_path = dataset_path or default_path
         self._records: List[AccountStatusRecord] = []
         self._load_records()

@@ -9,6 +9,7 @@ from typing import Dict, Optional
 
 from app.settings import settings
 from app.utils.text import strip_portuguese_accents
+from app.utils.paths import get_support_data_dir
 
 _EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PLAN_PATTERNS: Dict[str, str] = {
@@ -62,7 +63,8 @@ class UserProfileTool:
         file_path: Optional[Path] = None,
     ) -> None:
         self._persist = settings.support_tickets_persist_to_file if persist_to_file is None else persist_to_file
-        self._file_path = Path("data/support/user_profiles.json") if file_path is None else file_path
+        default_path = get_support_data_dir() / "user_profiles.json"
+        self._file_path = default_path if file_path is None else file_path
         self._profiles: Dict[str, UserProfile] = {}
         if self._persist:
             self._load()

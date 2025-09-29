@@ -25,12 +25,16 @@
   },
   {
     "id": "faq-003",
-    "pergunta": "Esqueci minha senha de acesso, como recuperar?",
-    "resposta": "Na tela inicial escolha 'Esqueci minha senha'. Enviaremos um codigo por email cadastrado. Caso nao receba, confira a caixa de spam e tente novamente em alguns minutos.",
+    "pergunta": "Esqueci minha senha de acesso, como recuperar? / Forgot my password to sign in",
+    "resposta": "Na tela inicial escolha 'Esqueci minha senha'. Enviaremos um codigo por email cadastrado. Caso nao receba, confira a caixa de spam e tente novamente em alguns minutos. Se você não consegue acessar (can't sign in), toque em \"Esqueci minha senha\" para redefinir.",
     "tags": [
       "senha",
       "acesso",
-      "login"
+      "login",
+      "sign",
+      "signin",
+      "account",
+      "password"
     ],
     "categoria": "acesso",
     "atualizado_em": "2025-06-30"
