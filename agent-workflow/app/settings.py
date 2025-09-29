@@ -3,6 +3,8 @@
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.utils.paths import get_support_data_dir
+
 
 class Settings(BaseSettings):
     app_name: str = "Agent Workflow"
@@ -37,7 +39,10 @@ class Settings(BaseSettings):
     support_faq_enabled: bool = True
     support_faq_score_threshold: float = 0.65
     support_tickets_persist_to_file: bool = False
-    support_tickets_file_path: str = "data/support/tickets.json"
+    support_tickets_file_path: str = Field(
+        default=str(get_support_data_dir() / "tickets.json"),
+        validation_alias=AliasChoices("SUPPORT_TICKETS_FILE_PATH"),
+    )
     support_escalation_auto: bool = False
     support_pii_masking_enabled: bool = True
     support_max_response_chars: int = 1200

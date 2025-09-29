@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Set
 
 from app.settings import settings
+from app.utils.paths import get_data_dir
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,7 @@ class RAGConfig:
     dry_run: bool = False
 
 
-DEFAULT_DATA_BASE = Path("data") / "rag"
+DEFAULT_DATA_BASE = get_data_dir() / "rag"
 DEFAULT_SEED_FILE = DEFAULT_DATA_BASE / "sources" / "seed_urls.txt"
 DEFAULT_WHITELIST_FILE = DEFAULT_DATA_BASE / "sources" / "whitelist.txt"
 

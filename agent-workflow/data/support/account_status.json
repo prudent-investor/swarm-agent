@@ -7,7 +7,14 @@
       "transferencia bloqueado",
       "transferencias bloqueado",
       "transferencia travada",
-      "transferencias travadas"
+      "transferencias travadas",
+      "cannot make transfers",
+      "can't make transfers",
+      "not able to make transfers",
+      "unable to make transfers",
+      "transfer not working",
+      "transfers not working",
+      "transfer not going through"
     ],
     "status": "security_review",
     "reason": "Uma análise automática identificou movimentação acima do padrão do seu CNPJ e precisamos validar a origem dos recursos.",
